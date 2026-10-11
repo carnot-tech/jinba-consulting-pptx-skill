@@ -5,6 +5,8 @@
 //   3. スライド外への要素はみ出し
 //   4. 空きの多いページ（タイトル下〜フッター上の版面のうち、本文が占める縦の範囲の外側が40%超。上下に寄せた空きも数える）
 //   5. 中身の無い列が残ったグリッド（項目を減らしたのに列数がそのまま）
+//   8. 文字どうしの重なり（WARN）
+//   9. 同じ役割（同じ要素・クラス・辺）の罫線の太さがデッキの中で揃っていない（WARN）
 //   7. ページ下部の結論帯（クラス名に頼らず位置と形で拾う。WARN）
 //   6. ページ間でタイトルの実際の大きさが揃っていない（パーツ集の混在で縮小がかからないページ）。本文の大きさのずれは WARN
 // 使い方: node scripts/check_layout.mjs deck.html   （playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
@@ -49,6 +51,7 @@ const { issues, warns } = await page.evaluate(() => {
     return w;
   };
   const sizes = [];
+  const borders = {};
   const slides = [...document.querySelectorAll("section.s, section.slide, .slide")];
   slides.forEach((s, i) => {
     const n = i + 1;
@@ -145,6 +148,35 @@ const { issues, warns } = await page.evaluate(() => {
         break;
       }
     }
+    // 8. 文字どうしの重なり：文字を持つ葉要素の矩形が、別の葉要素と2割以上重なる
+    {
+      const leaves = els.filter((el) => el.children.length === 0 && (el.textContent || "").trim().length > 0 && !el.closest("svg"))
+        .map((el) => ({ el, r: el.getBoundingClientRect() })).filter((x) => x.r.width > 2 && x.r.height > 2);
+      let hit = 0;
+      for (let a = 0; a < leaves.length && hit < 3; a++) for (let b = a + 1; b < leaves.length && hit < 3; b++) {
+        const A = leaves[a], B = leaves[b];
+        if (A.el.contains(B.el) || B.el.contains(A.el)) continue;
+        const ix = Math.min(A.r.right, B.r.right) - Math.max(A.r.left, B.r.left);
+        const iy = Math.min(A.r.bottom, B.r.bottom) - Math.max(A.r.top, B.r.top);
+        if (ix <= 0 || iy <= 0) continue;
+        const small = Math.min(A.r.width * A.r.height, B.r.width * B.r.height);
+        if (ix * iy > small * 0.2) {
+          hit++;
+          warnOut.push(`p${n}: 文字が重なっている「${(A.el.textContent || "").trim().slice(0, 14)}」と「${(B.el.textContent || "").trim().slice(0, 14)}」（意図した重なりでも読めるかを確かめる）`);
+        }
+      }
+    }
+    // 9. 罫線の太さを役割（要素名＋クラス＋辺）ごとに集める
+    for (const el of s.querySelectorAll("*")) {
+      const st = getComputedStyle(el);
+      for (const side of ["Top", "Bottom", "Left", "Right"]) {
+        const w = parseFloat(st[`border${side}Width`]);
+        if (!(w > 0) || st[`border${side}Style`] === "none") continue;
+        const scale = el.offsetWidth ? el.getBoundingClientRect().width / el.offsetWidth : 1;
+        const key = `${el.tagName.toLowerCase()}${el.classList.length ? "." + [...el.classList].sort().join(".") : ""}:${side.toLowerCase()}`;
+        (borders[key] ||= new Map()).set(Math.round(w * scale * 2) / 2, n);
+      }
+    }
     // 6. タイトルと本文の実際の大きさ（表紙・章扉・裏表紙は対象外）
     if (!s.matches(".cover, .chap, .back")) {
       const ttl = s.querySelector("h1, .title, .ttl");
@@ -176,6 +208,10 @@ const { issues, warns } = await page.evaluate(() => {
       out.push(`p${x.n}: タイトルの実際の大きさが他のページの ${Math.round((x.title / mt) * 100)}%（パーツ集の混在で縮小がかかっていない可能性。§4・追加パーツ集は .slide の zoom ごと持ち込む）`);
     if (mb && x.body && Math.abs(x.body / mb - 1) > 0.15)
       warnOut.push(`p${x.n}: 本文の実際の大きさが他のページの ${Math.round((x.body / mb) * 100)}%（意図した強調でなければ揃える）`);
+  }
+  // 9. 同じ役割の罫線が、ページによって違う太さで描かれている
+  for (const [key, m] of Object.entries(borders)) {
+    if (m.size > 1) warnOut.push(`同じ役割の罫線の太さが揃っていない：${key} が ${[...m.keys()].sort((a, b) => a - b).join("px・")}px（§5.4: 同じ役割の線は同じ太さにする）`);
   }
   return { issues: [...new Set(out)], warns: [...new Set(warnOut)] };
 });
