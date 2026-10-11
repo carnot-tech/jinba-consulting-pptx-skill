@@ -2875,12 +2875,12 @@ body {
 .parts .ref { font-size: 13px; color: var(--blue); font-weight: 700; margin-left: auto; white-space: nowrap; }
 
 /* table（パーツ06・07・09・11・12・13・14・25） */
-.parts table { border-collapse: collapse; width: 100%; font-size: 17px; flex: 0 0 auto; }
-.parts th { background: none; text-align: left; padding: 12px; font-size: 19px; font-weight: 700; color: var(--ink); border-bottom: 2px solid var(--ink); }
+.parts table { border-collapse: collapse; width: 100%; font-size: 19.2px; flex: 0 0 auto; }
+.parts th { background: none; text-align: left; padding: 12px; font-size: 24.2px; font-weight: 700; color: var(--ink); border-bottom: 2px solid var(--ink); }
 .parts td { padding: 19px 12px; border-bottom: 1px solid var(--rule); vertical-align: middle; line-height: 1.65; color: var(--ink); }
 .parts td.b { font-weight: 700; color: var(--ink); }
 .parts tr:last-child td { border-bottom: 0; }
-.parts td.ax { font-size: 18px; font-weight: 700; color: var(--blue); font-family: var(--pserif); border-right: 2px solid var(--ink); }
+.parts td.ax { font-size: 24.2px; font-weight: 700; color: var(--blue); font-family: var(--pserif); border-right: 2px solid var(--ink); }
 .parts th.ax { border-right: 2px solid var(--ink); }
 .parts > table, .parts .side .sb table, .parts .two > div > table { flex: 1 1 0; height: 0; }
 /* 表を縦に伸ばすと余剰高さが見出し行にも配分され見出しが沈む（slide-rules §4.21） */
@@ -2948,8 +2948,8 @@ body {
 .parts .side .sb { padding: 0 0 0 38px; display: flex; flex-direction: column; min-height: 0; }
 
 /* レバー矢印表（パーツ12） */
-.parts .lev { width: 100%; border-collapse: collapse; font-size: 17px; }
-.parts .lev th { font-size: 19px; }
+.parts .lev { width: 100%; border-collapse: collapse; font-size: 19.2px; }
+.parts .lev th { font-size: 24.2px; }
 .parts .lev td { padding: 14px 12px; }
 .parts .lev .ar { height: 26px; display: flex; align-items: center; color: #fff; font-size: 15px; font-weight: 700; padding-left: 14px; clip-path: polygon(0 0, calc(100% - 19px) 0, 100% 50%, calc(100% - 19px) 100%, 0 100%); }
 .parts .lev .up { background: var(--blue); }
@@ -3033,6 +3033,16 @@ body {
   .slide{margin:0;box-shadow:none;width:var(--slide-w);zoom:0.8;height:900px}
 }
 
+
+/* エグゼクティブサマリー：本文のタイトル列に対応する行を、主文1本＋詳細2〜3本の階層ブレットで書く（slide-rules §7.16） */
+.exsum{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:20px}
+.exsum>li{display:grid;grid-template-columns:230px 1fr 110px;gap:28px;border-top:1px solid var(--rule);padding-top:16px}
+.exsum .es-tag{font-family:var(--pserif);font-weight:700;font-size:24.2px;color:var(--ink);line-height:1.4}
+.exsum .es-main{font-weight:700;font-size:21px;line-height:1.55;color:var(--ink)}
+.exsum ul{list-style:none;margin:8px 0 0;padding:0}
+.exsum ul li{position:relative;padding-left:1.2em;font-size:19.2px;line-height:1.6}
+.exsum ul li::before{content:"–";position:absolute;left:0}
+.exsum .es-ref{font-size:17px;color:var(--muted);text-align:right;white-space:nowrap}
 </style></head><body>
 <main class="deck skin-warm">
 <section class="slide slide--no-title-rule">
@@ -3040,7 +3050,7 @@ body {
     <div class="kicker">01  executive_summary</div>
     <h1 class="title">エグゼクティブサマリー</h1>
     <div class="rule"></div>
-    <div class="content"><div class="three-col"><div><div class="section-label">タイトル 2</div><div class="body-copy">Text 1</div></div><div><div class="section-label">タイトル 3</div><div class="body-copy">Text 2</div></div><div><div class="section-label">タイトル 4</div><div class="body-copy">Text 3</div></div></div></div>
+    <div class="content"><ul class="exsum"><li><div class="es-tag">論点1｜ラベル 1</div><div class="es-body"><div class="es-main">Text 1（そのページのタイトルと同じ主張を1文で）</div><ul><li>Text 2（根拠・数字）</li><li>Text 3（意味合い・次の打ち手）</li></ul></div><div class="es-ref">→ P.3〜4</div></li><li><div class="es-tag">論点2｜ラベル 2</div><div class="es-body"><div class="es-main">Text 4（そのページのタイトルと同じ主張を1文で）</div><ul><li>Text 5（根拠・数字）</li><li>Text 6（意味合い・次の打ち手）</li></ul></div><div class="es-ref">→ P.5〜6</div></li><li><div class="es-tag">論点3｜ラベル 3</div><div class="es-body"><div class="es-main">Text 7（そのページのタイトルと同じ主張を1文で）</div><ul><li>Text 8（根拠・数字）</li><li>Text 9（意味合い・次の打ち手）</li></ul></div><div class="es-ref">→ P.7〜8</div></li></ul></div>
     <footer class="footer"><span class="source">出典：Source 1</span><span>2</span></footer>
   </div>
 </section>

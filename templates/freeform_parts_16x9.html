@@ -39,6 +39,9 @@ html,body{margin:0;background:var(--page-bg);font-family:var(--font-sans);color:
 .bar{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1.5px solid var(--navy);padding-bottom:2.2mm;margin-top:3mm;flex:0 0 auto}
 .logo{font-family:var(--font-serif);font-weight:600;font-size:18pt;color:var(--navy)}
 .date{font-size:7.5pt;letter-spacing:.15em;color:var(--muted)}
+/* 本文ページの上部帯は右上のラベルだけを見せる（資料名はフッターにあるので出さない・罫線も引かない — slide-rules §4.62） */
+.s:not(.cover):not(.chap) .bar{border-bottom:0}
+.s:not(.cover):not(.chap) .bar .logo{visibility:hidden}
 h1{margin:4.5mm 0 0 0;font-family:var(--font-serif);font-size:22pt;line-height:1.3;color:var(--navy);font-weight:600;flex:0 0 auto} /* 2行まで可（意味の切れ目で <br>。slide-rules §2.1） */
 .c{margin-top:6mm;flex:1;min-height:0;display:flex;flex-direction:column;gap:5mm;margin-bottom:19mm}
 .c>.grid{flex:1;grid-auto-rows:1fr;min-height:0}
@@ -55,9 +58,9 @@ h1{margin:4.5mm 0 0 0;font-family:var(--font-serif);font-size:22pt;line-height:1
 .bd{padding:3.5mm 4.5mm;font-size:10pt;line-height:1.7;color:var(--ink);flex:1}
 .ref{font-size:8pt;color:var(--accent);font-weight:700;margin-left:auto;white-space:nowrap}
 .rows .r>div:last-child{display:flex;justify-content:space-between;align-items:baseline;gap:4mm} /* 「→ P.n」を右端に */
-.rows .r{display:grid;grid-template-columns:44mm 1fr;gap:6mm;padding:4mm 0;border-top:1px solid var(--rule);font-size:10.5pt;line-height:1.6}
+.rows .r{display:grid;grid-template-columns:44mm 1fr;gap:6mm;padding:4mm 0;border-top:1px solid var(--rule);font-size:11.5pt;line-height:1.6}
 .rows .r:first-child{border-top:0}
-.rows .l{font-family:var(--font-serif);font-weight:700;font-size:11.5pt;color:var(--accent)}
+.rows .l{font-family:var(--font-serif);font-weight:700;font-size:14.5pt;color:var(--accent)}
 .c>.rows{flex:1;display:flex;flex-direction:column}
 .c>.rows .r{flex:1;align-items:center}
 .stat{background:var(--navy);color:#fff;padding:4mm 5mm}
@@ -67,12 +70,12 @@ h1{margin:4.5mm 0 0 0;font-family:var(--font-serif);font-size:22pt;line-height:1
 .stat .v{font-size:22pt;font-weight:700;margin:1mm 0}
 .stat .cp{font-size:7.5pt;color:var(--cyan);line-height:1.6}
 .stat.l .cp{color:var(--muted)}
-table{border-collapse:collapse;width:100%;font-size:10pt;flex:0 0 auto}
-th{background:none;text-align:left;padding:2.5mm;font-size:11.5pt;font-weight:700;color:var(--navy);border-bottom:1.8px solid var(--navy)}
+table{border-collapse:collapse;width:100%;font-size:11.5pt;flex:0 0 auto}
+th{background:none;text-align:left;padding:2.5mm;font-size:14.5pt;font-weight:700;color:var(--navy);border-bottom:1.8px solid var(--navy)}
 td{padding:4.5mm 2.5mm;border-bottom:1px solid var(--rule);vertical-align:middle;line-height:1.65;color:var(--ink)}
 td.b{font-weight:700;color:var(--navy)}
 tr:last-child td{border-bottom:0}
-td.ax{font-size:11pt;font-weight:700;color:var(--accent);font-family:var(--font-serif);border-right:1.8px solid var(--navy)}
+td.ax{font-size:14.5pt;font-weight:700;color:var(--accent);font-family:var(--font-serif);border-right:1.8px solid var(--navy)}
 th.ax{border-right:1.8px solid var(--navy)}
 .c>table{flex:1 1 0;height:0}
 /* 列の内容が同種（時点・案など）なら等幅にする。最後の列だけに余白を吸わせて右側を空けない（§4.12） */
@@ -125,8 +128,8 @@ table.eq{table-layout:fixed}
 .side .sp .cm{font-family:var(--font-serif);font-size:14pt;font-weight:700;line-height:1.55;margin-top:auto}
 .side .sb{padding:0 0 0 8mm;display:flex;flex-direction:column;min-height:0}
 /* レバー矢印表 */
-.lev{width:100%;border-collapse:collapse;font-size:10pt}
-.lev th{font-size:11.5pt}
+.lev{width:100%;border-collapse:collapse;font-size:11.5pt}
+.lev th{font-size:14.5pt}
 .lev td{padding:3mm 2.5mm}
 .lev .ar{height:5.5mm;display:flex;align-items:center;color:#fff;font-size:9pt;font-weight:700;padding-left:3mm;clip-path:polygon(0 0,calc(100% - 4mm) 0,100% 50%,calc(100% - 4mm) 100%,0 100%)}
 .lev .up{background:var(--accent)}.lev .dn{background:var(--rule);color:var(--navy)}

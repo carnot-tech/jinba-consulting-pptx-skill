@@ -185,15 +185,15 @@ def main():
 /* ===== 追加パーツ集（templates/freeform_parts_more_16x9.html）===== */
 {more_css}
 /* ===== 追加パーツ集の見出しバーを基本パーツ集と同じ様式にする（.slide は zoom:0.8 なので px は 1/0.8 倍） ===== */
-.slide .hdr{{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid var(--navy);padding-bottom:10px;margin-bottom:6px}}
-.slide .hdr .logo{{font-family:var(--font-serif);font-weight:600;font-size:30px;color:var(--navy);line-height:1.1}}
+.slide .hdr{{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:0;padding-bottom:10px;margin-bottom:6px}}
+.slide .hdr .logo{{font-family:var(--font-serif);font-weight:600;font-size:30px;color:var(--navy);line-height:1.1;visibility:hidden}}  /* 本文ページの上部は右上のラベルだけ（§4.62） */
 .slide .hdr .date{{font-size:12.5px;letter-spacing:.15em;color:var(--muted)}}
 .slide .title{{margin-top:14px}}
-/* ===== 系統間の文字スケールも揃える（.s基準の実効サイズ: タイトル22pt・列見出し11.5pt・本文10.5pt。
+/* ===== 系統間の文字スケールも揃える（.s基準の実効サイズ: タイトル22pt・列見出し14.5pt・本文11.5pt。§6
    .slide は zoom:0.8 なので authored px = 実効pt ÷ 0.6） ===== */
 .slide .title{{font-size:36.6px}}
-.slide .ism-col-label{{font-size:19.2px}}
-.slide .ism-issue, .slide .ism-solution-text{{font-size:17.5px}}
+.slide .ism-col-label{{font-size:24.2px}}
+.slide .ism-issue, .slide .ism-solution-text{{font-size:19.2px}}
 /* ===== 画面表示は zoom でなく transform で縮小する =====
    zoomの画面描画・ボックス寸法はエンジン/ビューア依存（一部のビューアで .slide だけ大きく見える）。
    画面では箱を .s と同じ 338.67mm に固定し、中身は1600×900座標系のまま0.8倍。
