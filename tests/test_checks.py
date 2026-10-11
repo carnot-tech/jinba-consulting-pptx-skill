@@ -324,3 +324,35 @@ class PptxLayout(unittest.TestCase):
         def build(s, In, M):
             self._solid(s.shapes.add_shape(M.RECTANGLE, In(1), In(1), In(2), In(1)))
         self.assertIn("empty", self._deck(build))
+
+
+class MemberFeedbackChecks(unittest.TestCase):
+    """メンバーの作業記録から足した検査：文末の「。」／ブレット記号の混在／表のページの連続／操作用の部品"""
+
+    def page(self, n, body, title="検査の見本として置いたページのタイトル"):
+        return f'<section class="s"><h1>{title}</h1>{body}<div class="foot"><span>{n}</span></div></section>'
+
+    def test_trailing_period_warns_and_clean_passes(self):
+        bad = self.page(9, "<ul><li>添付漏れを提出前に警告する。</li></ul>")
+        ok = self.page(9, "<ul><li>添付漏れを提出前に警告する</li></ul>")
+        self.assertTrue(any("§7.25" in l for l in warns(GOOD.replace("</body>", bad + "</body>", 1))))
+        self.assertFalse(any("§7.25" in l for l in warns(GOOD.replace("</body>", ok + "</body>", 1))))
+
+    def test_mixed_bullet_marks_warn(self):
+        bad = self.page(9, "<div>• 添付漏れを警告する</div><div>● 勘定科目を提示する</div>")
+        ok = self.page(9, "<div>• 添付漏れを警告する</div><div>• 勘定科目を提示する</div>")
+        self.assertTrue(any("§7.3" in l for l in warns(GOOD.replace("</body>", bad + "</body>", 1))))
+        self.assertFalse(any("§7.3" in l for l in warns(GOOD.replace("</body>", ok + "</body>", 1))))
+
+    def test_three_table_pages_in_a_row_warn(self):
+        t = "<table><tr><th>観点</th><th>内容</th></tr><tr><td>費用</td><td>年額で比べる</td></tr></table>"
+        three = "".join(self.page(9 + k, t) for k in range(3))
+        two = "".join(self.page(9 + k, t) for k in range(2))
+        self.assertTrue(any("§4.96" in l for l in warns(GOOD.replace("</body>", three + "</body>", 1))))
+        self.assertFalse(any("§4.96" in l for l in warns(GOOD.replace("</body>", two + "</body>", 1))))
+
+    def test_buttons_must_hide_in_print(self):
+        bad = self.page(9, "<button>次へ</button>")
+        hidden = bad + "<style>@media print{button{display:none}}</style>"
+        self.assertTrue(any("§1" in l for l in warns(GOOD.replace("</body>", bad + "</body>", 1))))
+        self.assertFalse(any("§1:" in l for l in warns(GOOD.replace("</body>", hidden + "</body>", 1))))

@@ -4,6 +4,9 @@
 //   2. タイトル（h1 / .title）の右端はみ出し（nowrap + overflow:hidden の黙殺検出）
 //   3. スライド外への要素はみ出し
 //   4. 空きの多いページ（タイトル下〜フッター上の版面のうち、本文が占める縦の範囲の外側が40%超。上下に寄せた空きも数える）
+//   5. 中身の無い列が残ったグリッド（項目を減らしたのに列数がそのまま）
+//   7. ページ下部の結論帯（クラス名に頼らず位置と形で拾う。WARN）
+//   6. ページ間でタイトルの実際の大きさが揃っていない（パーツ集の混在で縮小がかからないページ）。本文の大きさのずれは WARN
 // 使い方: node scripts/check_layout.mjs deck.html   （playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -32,8 +35,20 @@ await page.emulateMedia({ media: "print" });
 await page.goto(pathToFileURL(path.resolve(file)).href);
 await page.waitForTimeout(300);
 
-const issues = await page.evaluate(() => {
+const { issues, warns } = await page.evaluate(() => {
   const out = [];
+  const warnOut = [];
+  // 実際に描かれる文字の大きさ（zoom・transform 込み）。全角1文字の幅を測る
+  const effSize = (el) => {
+    const probe = document.createElement("span");
+    probe.textContent = "あ";
+    probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;padding:0;border:0;letter-spacing:0";
+    el.appendChild(probe);
+    const w = probe.getBoundingClientRect().width;
+    probe.remove();
+    return w;
+  };
+  const sizes = [];
   const slides = [...document.querySelectorAll("section.s, section.slide, .slide")];
   slides.forEach((s, i) => {
     const n = i + 1;
@@ -87,6 +102,56 @@ const issues = await page.evaluate(() => {
         out.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（40%超。表を割る・図を足す・2枚を1枚に統合する）`);
       }
     }
+    // 5. 中身の無い列が残ったグリッド
+    for (const g of s.querySelectorAll("*")) {
+      const st = getComputedStyle(g);
+      if (st.display !== "grid" || st.visibility === "hidden") continue;
+      const tracks = st.gridTemplateColumns.split(" ").map(parseFloat).filter((v) => v > 0);
+      const kids = [...g.children].filter((c) => getComputedStyle(c).display !== "none");
+      if (tracks.length < 2 || kids.length === 0) continue;
+      const gr = g.getBoundingClientRect();
+      const scale = g.offsetWidth ? gr.width / g.offsetWidth : 1;
+      const gap = (parseFloat(st.columnGap) || 0) * scale;
+      let x = gr.left + (parseFloat(st.paddingLeft) || 0) * scale + (parseFloat(st.borderLeftWidth) || 0) * scale;
+      const empty = [];
+      tracks.forEach((w, k) => {
+        const l = x, r = x + w * scale;
+        const used = kids.some((c) => { const cr = c.getBoundingClientRect(); return cr.width > 0 && cr.left < r - 1 && cr.right > l + 1; });
+        if (!used && w * scale > 20) empty.push(k + 1);
+        x = r + gap;
+      });
+      if (empty.length) out.push(`p${n}: グリッドに中身の無い列が残っている（${tracks.length}列中 ${empty.join("・")}列目。列数を項目数に合わせる）`);
+    }
+    // 7. ページ下部の結論帯：版面の下3割に置いた、横幅7割以上・高さ15%以下の塗りか太い上罫のある文字の帯
+    if (!s.matches(".cover, .chap, .back")) {
+      for (const el of s.querySelectorAll("div, p, section, aside")) {
+        if (el.closest("table, .foot, .footer, footer, .src") || el === s) continue;
+        if (!(el.textContent || "").trim()) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width < sr.width * 0.7 || r.height > sr.height * 0.15 || r.height < 8) continue;
+        const limit = fr ? fr.top : sr.bottom;
+        if (r.top < sr.top + sr.height * 0.7 || r.bottom > limit + 2) continue;
+        const st = getComputedStyle(el);
+        const bg = st.backgroundColor;
+        const filled = bg && bg !== "transparent" && !/rgba\([^)]*,\s*0\)$/.test(bg);
+        const ruled = parseFloat(st.borderTopWidth) >= 2 && st.borderTopStyle !== "none";
+        if (!filled && !ruled) continue;
+        // 柱＋土台の図（柱のグリッドや同じ帯が上に積まれている）は図の一部なので対象外
+        const prev = el.previousElementSibling;
+        if (prev && ((el.className && prev.className === el.className) ||
+            (getComputedStyle(prev).display === "grid" && getComputedStyle(prev).gridTemplateColumns.split(" ").length >= 3))) continue;
+        if (el.parentElement && el.parentElement.closest("div, p, section, aside") !== s && el.parentElement.getBoundingClientRect().width >= r.width && getComputedStyle(el.parentElement).backgroundColor === bg) continue;
+        warnOut.push(`p${n}: ページ下部に結論の帯らしき要素「${(el.textContent || "").trim().slice(0, 24)}」（§4.8: 結論はタイトルへ。帯の形を変えただけの言い換えも同じ）`);
+        break;
+      }
+    }
+    // 6. タイトルと本文の実際の大きさ（表紙・章扉・裏表紙は対象外）
+    if (!s.matches(".cover, .chap, .back")) {
+      const ttl = s.querySelector("h1, .title, .ttl");
+      const body = [...s.querySelectorAll("li, td, p")].filter((el) => (el.textContent || "").trim().length > 8 && !el.closest(".src, .foot, .footer"));
+      const bs = body.map(effSize).filter((v) => v > 0).sort((a, b) => a - b);
+      sizes.push({ n, title: ttl ? effSize(ttl) : 0, body: bs.length ? bs[Math.floor(bs.length / 2)] : 0 });
+    }
     for (const el of els) {
       const r = el.getBoundingClientRect();
       if (r.height === 0 || r.width === 0) continue;
@@ -103,10 +168,20 @@ const issues = await page.evaluate(() => {
       }
     }
   });
-  return [...new Set(out)];
+  // 6. ページ間の大きさの揃い。多数派（中央値）から外れたページを挙げる
+  const median = (a) => { const v = a.filter((x) => x > 0).sort((p, q) => p - q); return v.length ? v[Math.floor(v.length / 2)] : 0; };
+  const mt = median(sizes.map((x) => x.title)), mb = median(sizes.map((x) => x.body));
+  for (const x of sizes) {
+    if (mt && x.title && Math.abs(x.title / mt - 1) > 0.04)
+      out.push(`p${x.n}: タイトルの実際の大きさが他のページの ${Math.round((x.title / mt) * 100)}%（パーツ集の混在で縮小がかかっていない可能性。§4・追加パーツ集は .slide の zoom ごと持ち込む）`);
+    if (mb && x.body && Math.abs(x.body / mb - 1) > 0.15)
+      warnOut.push(`p${x.n}: 本文の実際の大きさが他のページの ${Math.round((x.body / mb) * 100)}%（意図した強調でなければ揃える）`);
+  }
+  return { issues: [...new Set(out)], warns: [...new Set(warnOut)] };
 });
 
 await browser.close();
+for (const m of warns.slice(0, 20)) console.log("WARN  " + m);
 if (issues.length) {
   for (const m of issues.slice(0, 20)) console.log("FAIL  " + m);
   console.log(`\n${issues.length} layout FAIL`);

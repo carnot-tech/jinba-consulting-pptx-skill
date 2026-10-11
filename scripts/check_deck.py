@@ -53,6 +53,21 @@ def check_xml_validity(idx, xml):
         fail(f"p{idx}: 文字の大きさ sz が範囲外（100〜400000。PowerPoint が開けない — §8.7）")
 
 
+def check_dangling_refs(idx, xml, rels_xml):
+    """図形・画像・動画を消したあとに残った参照。PowerPoint で開くと修復ダイアログが出る（LibreOffice の PDF 化では気づけない）。"""
+    ids = set(re.findall(r'Id="([^"]+)"', rels_xml or ""))
+    used = set(re.findall(r'r:(?:embed|id|link|pict)="([^"]+)"', xml))
+    missing = sorted(used - ids)
+    if missing:
+        fail(f"p{idx}: 関係ファイル（rels）に無い参照 {missing[:4]}（消した図形・画像の参照が残っている。PowerPoint が修復を求める — §8.7）")
+    timing = re.search(r"<p:timing>.*?</p:timing>", xml, re.S)
+    if timing:
+        shape_ids = set(re.findall(r'<p:cNvPr[^>]*\bid="(\d+)"', xml))
+        orphan = sorted(set(re.findall(r'spid="(\d+)"', timing.group(0))) - shape_ids, key=int)
+        if orphan:
+            fail(f"p{idx}: アニメーションが存在しない図形を指している（spid {orphan[:4]}。図形を消したらアニメーションも消す — §8.7）")
+
+
 def check_house(idx, slide, xml):
     """差し込む先の資料と作りが合っているか（slide-rules §8.7）。HOUSE は measure_deck.py の出力"""
     if HOUSE.get("title") and slide.shapes.title is None:
@@ -271,6 +286,67 @@ def check_multi_sentence(idx, leaf_texts):
         fail(f"p{idx}: 1つの文章塊に2文以上 ×{len(bad)}: 「{bad[0][:36]}…」（1項目1文の箇条に分ける。動きはきっかけ→起きること→判断→結果の順）")
 
 
+# --- 1文の項目の文末「。」（§7.25）---------------------------------------------------
+def check_trailing_period(idx, leaf_texts):
+    """1文で終わる箇条・ラベル・表のマスの文末に「。」を付けない。出典・注記は対象外。"""
+    bad = [t for t in leaf_texts
+           if t.endswith("。") and not t.startswith(("出典", "注", "※", "Source"))
+           and not SENTENCE_END.search(t[:-1])]
+    if bad:
+        warn(f"p{idx}: 1文の項目の文末に「。」 ×{len(bad)}: 「{bad[0][-24:]}」（§7.25: 文末の句点を外す）")
+
+
+# --- 本文に直接打ったブレット記号（§7.3）---------------------------------------------
+TYPED_BULLET = re.compile(r">\s*([・●•◆■▪◦‣]|-\s|－)\s*[^\s<]")
+
+
+def check_typed_bullets(idx, fragment):
+    """同じページでブレット記号の形を揃える。本文に打った記号が2種類以上、または打った記号と li のリストが混ざると WARN。"""
+    body = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", fragment, flags=re.S)
+    kinds = sorted(set(h.strip() for h in TYPED_BULLET.findall(body)))
+    if len(kinds) >= 2:
+        warn(f"p{idx}: 本文に打ったブレット記号が混ざっている（{''.join(kinds)}）（§7.3: 1つのデッキで記号の形を揃える。リストは li::before を既定にする）")
+    elif kinds and re.search(r"<li\b", body):
+        warn(f"p{idx}: 本文に打った記号（{kinds[0]}）と li のリストが同じページに混ざっている（§7.3: どちらかに揃える）")
+
+
+# --- 同じ見せ方のページの連続（§4.96）------------------------------------------------
+def page_shape(fragment):
+    if re.search(r"<table\b", fragment):
+        return "表"
+    return ""
+
+
+def check_shape_runs(shapes):
+    """表のページが3枚以上続いたら WARN。意図して並べた連番（同じ型の比較を続けて見せる等）なら無視してよい。"""
+    if TEMPLATE_MODE:
+        return  # パーツ集は同じ型を並べて見せる見本なので対象外
+    run = []
+    for i, sh in enumerate(shapes + [""], 1):
+        if sh and run and shapes[run[-1] - 1] == sh:
+            run.append(i)
+            continue
+        if len(run) >= 3:
+            warn(f"p{run[0]}〜p{run[-1]}: {shapes[run[0]-1]}のページが{len(run)}枚続く（§4.96: 比較・流れ・因果・位置づけのどれを見せるかを問い直す。意図した連番なら無視してよい）")
+        run = [i] if sh else []
+
+
+# --- 配布物に残った操作用の部品（§8.8）------------------------------------------------
+def check_static_ui(html):
+    """PDF・印刷・静的な配布物に、押せるように見えるボタン・タブ・ページ送りを残さない。印刷時に隠していれば可。"""
+    body = html.split("</style>", 1)[1] if "</style>" in html else html
+    n = len(re.findall(r"<button\b|role=\"tab\"|class=\"[^\"]*\b(?:pager|nav-btn|prev|next|tabbar)\b", body))
+    if n and not re.search(r"@media\s+print\s*{[^@]*(button|\.pager|\.nav|\[role=.?tab)[^{]*{[^}]*display\s*:\s*none", html, re.S):
+        warn(f"操作用の部品（ボタン・タブ・ページ送り）×{n} が印刷時に隠れていない（§1: @media print で display:none にする）")
+
+
+def check_mixed_parts(html, slide_classes):
+    """基本パーツ集と追加パーツ集（1600px 基準）を混ぜたデッキ。追加パーツ側の縮小が抜けるとそのページだけ大きく出る。"""
+    if re.search(r"--slide-w\s*:\s*1600px", html) and re.search(r"338\.67mm", html) and len(set(slide_classes)) > 1:
+        if not re.search(r"\.slide\s*{[^}]*zoom\s*:\s*0?\.8", html):
+            warn("基本パーツ集と追加パーツ集が混在しているが、追加パーツの .slide に zoom:0.8 が無い（§4.97: ページごとに文字の大きさがずれる。check_layout.mjs で大きさの揃いを確かめる）")
+
+
 # --- 禁止語（顧客名・社内語・案件コード）-------------------------------------------
 # 公開・社外共有前に、資料ごとに出してはいけない語を外部ファイルで渡す（リポジトリには入れない）。
 #   python3 check_deck.py deck.html --forbid ~/.config/deck-forbidden-terms.txt
@@ -461,6 +537,8 @@ def check_pptx(path):
             idx = int(re.search(r"slide(\d+)", n).group(1))
             term_pages.append((idx, pptx_text(xml)))
             check_xml_validity(idx, xml)
+            rels_name = f"ppt/slides/_rels/slide{idx}.xml.rels"
+            check_dangling_refs(idx, xml, z.read(rels_name).decode("utf8", "ignore") if rels_name in z.namelist() else "")
             if re.search(r'<p:sld\b[^>]*\bshow="0"', xml):
                 warn(f"p{idx}: 非表示のスライド（使わないならファイルから消す。付録の控えとして意図して残すなら無視してよい — slide-rules §8）")
             if XML_ONLY:
@@ -677,6 +755,7 @@ def check_html(path):
             warn(f"塗りありボックスに枠線: `{sel.strip()[-40:]}`（塗りカードは border:0 — slide-rules §5.3）")
     # タイトル抽出
     titles = []
+    shapes = []
     pat = r'<(?:section|div)[^>]*class="(?:[^"]*\bslide\b[^"]*|s|s [^"]*)"[^>]*>'
     parts = re.split(pat, html)
     slides = parts[1:] if len(parts) > 1 else []
@@ -693,8 +772,14 @@ def check_html(path):
         check_exec_summary(i, t, s)
         if "cover" not in (slide_classes[i - 1] if i - 1 < len(slide_classes) else ""):
             check_multi_sentence(i, leaves)
+            check_trailing_period(i, [x for x in leaves if x != t])
+        check_typed_bullets(i, s)
+        shapes.append(page_shape(s))
     if not slides:
         warn("`.slide` 要素が見つからない（タイトル検査スキップ）")
+    check_shape_runs(shapes)
+    check_static_ui(html)
+    check_mixed_parts(html, slide_classes)
     check_production_meta(slides if slides else [html])
     if slides:
         check_terms([(i, re.sub(r"<[^>]+>", " ", s)) for i, s in enumerate(slides, 1)])
