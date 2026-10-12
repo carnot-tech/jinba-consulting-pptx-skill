@@ -331,6 +331,19 @@ def check_shape_runs(shapes):
         run = [i] if sh else []
 
 
+def check_page_refs(pages):
+    """ページを足す・消す・並べ替えたあとに残った参照（「→ P.n」・目次の番号）を拾う。
+    ページ数を超える番号を指していたら WARN（範囲内の取り違えは目視。§8 チェックリスト）。"""
+    if TEMPLATE_MODE or not pages:
+        return
+    total = len(pages)
+    for idx, text in pages:
+        bad = sorted({int(n) for n in re.findall(r"(?<![A-Za-z])[PpＰ]\s*[.．]\s*([0-9]{1,3})(?![0-9])", text)
+                      if int(n) > total})
+        if bad:
+            warn(f"p{idx}: 「P.{bad[0]}」はページ数（{total}枚）を超えている（構成を変えたあとの参照・目次の番号を振り直す）")
+
+
 # --- 配布物に残った操作用の部品（§1）------------------------------------------------
 def check_static_ui(html):
     """PDF・印刷・静的な配布物に、押せるように見えるボタン・タブ・ページ送りを残さない。印刷時に隠していれば可。"""
@@ -641,6 +654,7 @@ def check_pptx(path):
                         warn(f"p{i}: タイトル直下にサブタイトルらしき行: 「{txt}」")
     check_terms(term_pages)
     check_number_consistency(term_pages)
+    check_page_refs(term_pages)
     check_ai_smell(term_pages)
     return titles
 
@@ -762,19 +776,29 @@ def check_html(path):
     slide_classes = re.findall(pat.replace('class="(?:', 'class="((?:', 1).replace(')"[^>]*>', '))"[^>]*>', 1), html)
     for i, s in enumerate(slides, 1):
         m = re.search(r"<h1[^>]*>(.*?)</h1>", s, re.S) or re.search(r'class="[^"]*\b(?:ttl|title|msg)\b[^"]*"[^>]*>(.*?)</', s, re.S)
-        t = re.sub(r"<[^>]+>", "", m.group(1)).strip() if m else ""
+        raw_t = m.group(1) if m else ""
+        t = re.sub(r"<[^>]+>", "", raw_t).strip()
         t = re.sub(r"\s+", " ", t)
         titles.append(t)
-        check_title(i, t)
+        cls = (slide_classes[i - 1] if i - 1 < len(slide_classes) else "").split()
+        if "std" in cls:
+            # 正本から差し込んだ定型ページ（§4.99）は文章・版面の検査を飛ばす
+            shapes.append("")
+            continue
+        # <br> で意味の切れ目に明示改行済み（§2.13）なら、各行が1行目安に収まる限り2行想定の WARN は出さない
+        lines = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", x)).strip() for x in re.split(r"<br\s*/?>", raw_t)]
+        explicit_break = len(lines) > 1 and all(_fwlen(x) <= TITLE_MAX for x in lines)
+        check_title(i, t, explicit_break)
         check_count_match(i, t, re.sub(r"<[^>]+>", " ", s))
         leaves = _leaf_texts(s)
         check_body_placeholders(i, leaves, t)
         check_exec_summary(i, t, s)
-        if "cover" not in (slide_classes[i - 1] if i - 1 < len(slide_classes) else ""):
+        if "cover" not in cls:
             check_multi_sentence(i, leaves)
             check_trailing_period(i, [x for x in leaves if x != t])
         check_typed_bullets(i, s)
         shapes.append(page_shape(s))
+    check_page_refs([(i, re.sub(r"<[^>]+>", " ", s)) for i, s in enumerate(slides, 1)])
     if not slides:
         warn("`.slide` 要素が見つからない（タイトル検査スキップ）")
     check_shape_runs(shapes)

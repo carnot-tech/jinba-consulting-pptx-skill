@@ -200,7 +200,8 @@ class ProductionMeta(unittest.TestCase):
 
 
 def _has_playwright():
-    return (ROOT / "node_modules" / "playwright").exists()
+    import os
+    return (ROOT / "node_modules" / "playwright").exists() or bool(os.environ.get("PLAYWRIGHT_MODULE_DIR"))
 
 
 @unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
@@ -356,3 +357,81 @@ class MemberFeedbackChecks(unittest.TestCase):
         hidden = bad + "<style>@media print{button{display:none}}</style>"
         self.assertTrue(any("§1" in l for l in warns(GOOD.replace("</body>", bad + "</body>", 1))))
         self.assertFalse(any("§1:" in l for l in warns(GOOD.replace("</body>", hidden + "</body>", 1))))
+
+
+class WeeklyFeedback20261012(unittest.TestCase):
+    """10/12 回収分：改行済みタイトルの字数 WARN／正本から差し込んだ定型ページ／構成変更後に残った P.n"""
+
+    def page(self, n, body, title="検査の見本として置いたページのタイトル", cls="s"):
+        return f'<section class="{cls}"><h1>{title}</h1>{body}<div class="foot"><span>{n}</span></div></section>'
+
+    LONG = "提出時の確認と承認経路の見直しで、差し戻しと待ち時間を減らし、承認待ちを当日に縮める"
+
+    def test_long_title_without_break_warns(self):
+        w = warns(GOOD.replace("</body>", self.page(9, "<p>本文</p>", self.LONG) + "</body>", 1))
+        self.assertTrue(any("p7: タイトル 全角換算" in l for l in w), w)
+
+    def test_title_broken_with_br_does_not_warn(self):
+        t = self.LONG.replace("減らし、", "減らし、<br>", 1)
+        w = warns(GOOD.replace("</body>", self.page(9, "<p>本文</p>", t) + "</body>", 1))
+        self.assertFalse(any("p7: タイトル 全角換算" in l for l in w), w)
+
+    def test_std_page_skips_text_checks(self):
+        body = "<p>当社は2020年に創業した。東京に本社を置く。</p>"
+        code, fails = run(GOOD.replace("</body>", self.page(9, body) + "</body>", 1))
+        self.assertTrue(any("2文以上" in f for f in fails), fails)
+        code, fails = run(GOOD.replace("</body>", self.page(9, body, cls="s std") + "</body>", 1))
+        self.assertFalse(any("2文以上" in f for f in fails), fails)
+
+    def test_page_ref_beyond_deck_warns(self):
+        bad = self.page(9, "<p>詳細は → P.12</p>")
+        ok = self.page(9, "<p>詳細は → P.3</p>")
+        self.assertTrue(any("P.12" in l for l in warns(GOOD.replace("</body>", bad + "</body>", 1))))
+        self.assertFalse(any("ページ数" in l for l in warns(GOOD.replace("</body>", ok + "</body>", 1))))
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class LayoutFeedback20261012(unittest.TestCase):
+    """check_layout の WARN：並べた要素の揃い（§4.51）／片側の空き（§4.54）／ハイライトの数（§4.57）"""
+
+    def layout(self, body, cls="s"):
+        page = (f'<section class="{cls}"><h1>検査の見本として置いたページのタイトル</h1>{body}'
+                '<div class="foot"><span>9</span></div></section>')
+        html = GOOD.replace("</body>", page + "</body>", 1)
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "deck.html"
+            p.write_text(html, encoding="utf8")
+            r = subprocess.run(["node", str(ROOT / "scripts" / "check_layout.mjs"), str(p)],
+                               capture_output=True, text=True, cwd=ROOT, encoding="utf8")
+        return [l for l in r.stdout.splitlines() if l.startswith("p7") or "p7:" in l]
+
+    COL = '<div class="cmp"><h3>{h}</h3><ul><li>{t}</li><li>{t}</li></ul></div>'
+
+    def two_cols(self, cols):
+        c = "".join(self.COL.format(h=h, t="申請の内容を確認して承認者に回す") for h in ("現状", "導入後"))
+        return f'<div style="display:grid;grid-template-columns:{cols};gap:24px;height:380px">{c}</div>'
+
+    def test_unequal_contrast_columns_warn(self):
+        out = self.layout(self.two_cols("1fr 1.4fr"))
+        self.assertTrue(any("§4.51" in l for l in out), out)
+
+    def test_equal_contrast_columns_pass(self):
+        out = self.layout(self.two_cols("1fr 1fr"))
+        self.assertFalse(any("§4.51" in l for l in out), out)
+
+    def test_right_side_gap_warns(self):
+        body = '<div style="width:50%;height:380px"><ul><li>申請の内容を確認する</li></ul><div style="height:300px;border:1px solid #333"></div></div>'
+        self.assertTrue(any("右側" in l for l in self.layout(body)))
+        self.assertFalse(any("右側" in l for l in self.layout(self.two_cols("1fr 1fr"))))
+
+    def test_two_highlighted_rows_warn(self):
+        row = '<tr><td>費用</td><td>年額で比べる</td></tr>'
+        hl = '<tr><td style="background:#eee">費用</td><td style="background:#eee">年額で比べる</td></tr>'
+        t = lambda rows: f'<table style="height:380px"><tr><th>観点</th><th>内容</th></tr>{rows}</table>'
+        self.assertTrue(any("§4.57" in l for l in self.layout(t(hl + row + hl))))
+        self.assertFalse(any("§4.57" in l for l in self.layout(t(hl + row + row))))
+
+    def test_std_page_skips_layout_checks(self):
+        body = '<div style="width:50%;height:380px"><ul><li>会社概要</li></ul><div style="height:300px;border:1px solid #333"></div></div>'
+        self.assertFalse(any("右側" in l for l in self.layout(body, cls="s std")))
+
