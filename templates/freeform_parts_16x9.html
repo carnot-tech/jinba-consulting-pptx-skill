@@ -118,7 +118,9 @@ table.eq{table-layout:fixed}
 .legend .li-a{background:var(--soft)}
 .legend .li-b{background:var(--navy)}
 .legend.left{justify-content:flex-start}
-/* 凡例はグラフの右上（軸タイトルのすぐ下に右揃え）に置く。グラフの下に置かない（slide-rules §5.18） */
+/* 凡例はグラフの見出し（軸タイトル）の上に右揃えで置く。グラフの下に置かない（slide-rules §5.18） */
+:has(> .legend + .axh){position:relative}
+.legend:has(+ .axh){position:absolute;right:0;bottom:calc(100% + 1.2mm)}
 @media print{html,body{background:#fff}.s{margin:0!important;transform:none!important}.fitwrap{width:auto!important;height:auto!important;margin:0!important}}
 /* ── 追加パーツ用 ── */
 .axh .u{font-family:var(--font-sans);font-size:8.5pt;font-weight:400;color:var(--muted)}
@@ -525,8 +527,8 @@ th.hbc,td.hbc{text-align:center}
   <div class="c">
     <div class="two" style="grid-template-columns:1.6fr auto 1fr">
       <div>
-        <div class="axh"><span>指標名</span><span class="u">単位、YYYY〜YYYY年</span></div>
         <div class="legend"><span><i style="background:var(--accent)"></i>上位N社</span><span><i style="background:var(--rule)"></i>その他</span></div>
+        <div class="axh"><span>指標名</span><span class="u">単位、YYYY〜YYYY年</span></div>
         <svg viewBox="0 0 620 250" style="flex:1;min-height:0" preserveAspectRatio="none">
           <g fill="var(--accent)">
             <rect x="0" y="10" width="7" height="240"/><rect x="9" y="26" width="7" height="224"/><rect x="18" y="40" width="7" height="210"/><rect x="27" y="58" width="7" height="192"/><rect x="36" y="70" width="7" height="180"/>
@@ -671,8 +673,8 @@ th.hbc,td.hbc{text-align:center}
   <div class="bar"><div class="logo">資料名</div><div class="date">パーツ23｜増減の縦棒＋左右合計</div></div>
   <h1>増減の縦棒＋左右合計</h1>
   <div class="c">
-    <div class="axh"><span>指標名</span><span class="u">単位、YYYY〜YYYY年</span></div>
     <div class="legend"><span><i style="background:var(--accent)"></i>増える分</span><span><i style="background:var(--navy)"></i>減る分</span></div>
+    <div class="axh"><span>指標名</span><span class="u">単位、YYYY〜YYYY年</span></div>
     <svg viewBox="0 0 900 300" style="flex:1;min-height:0" preserveAspectRatio="xMidYMid meet">
       <text x="20" y="90" font-family="Yu Mincho" font-size="40" font-weight="700" fill="var(--accent)">＋200</text>
       <text x="20" y="112" font-family="Yu Gothic" font-size="14" fill="var(--ink)">増える分</text>
@@ -700,8 +702,8 @@ th.hbc,td.hbc{text-align:center}
   <div class="bar"><div class="logo">資料名</div><div class="date">パーツ24｜シナリオ線＋成長率チップ</div></div>
   <h1>シナリオ線＋成長率チップ</h1>
   <div class="c">
-    <div class="axh"><span>指標名</span><span class="u">単位、YYYY〜YYYY年</span></div>
     <div class="legend"><span><i style="background:var(--navy)"></i>Text 3が進む場合</span><span><i style="background:var(--accent)"></i>現状の延長</span><span><i style="background:var(--rule)"></i>Text 4が遅れる場合</span></div>
+    <div class="axh"><span>指標名</span><span class="u">単位、YYYY〜YYYY年</span></div>
     <svg viewBox="0 0 900 300" style="flex:1;min-height:0" preserveAspectRatio="xMidYMid meet">
       <line x1="60" y1="270" x2="760" y2="270" stroke="var(--navy)" stroke-width="2"/>
       <polyline points="60,250 180,225 300,190 420,150 540,105 660,55" fill="none" stroke="var(--navy)" stroke-width="3"/>
