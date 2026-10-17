@@ -435,3 +435,31 @@ class LayoutFeedback20261012(unittest.TestCase):
         body = '<div style="width:50%;height:380px"><ul><li>会社概要</li></ul><div style="height:300px;border:1px solid #333"></div></div>'
         self.assertFalse(any("右側" in l for l in self.layout(body, cls="s std")))
 
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class TableStretchAndLegend(LayoutFeedback20261012):
+    """check_layout：表を縦に引き伸ばさない（§4.12 FAIL）／凡例はグラフの右上（§5.18 WARN）"""
+
+    ROWS = '<tr><th>部門</th><th>件数</th></tr><tr><td>営業部</td><td>月に約120件</td></tr><tr><td>管理部</td><td>月に約40件</td></tr>'
+    CHART = '<svg viewBox="0 0 400 200" style="height:70mm"><rect x="20" y="40" width="80" height="160" fill="#5A3921"/><rect x="160" y="100" width="80" height="100" fill="#C5A681"/></svg>'
+    LEGEND = '<div class="legend"><span><i style="display:inline-block;width:4mm;height:4mm;background:#5A3921"></i>本社</span><span><i style="display:inline-block;width:4mm;height:4mm;background:#C5A681"></i>拠点</span></div>'
+
+    def test_stretched_table_fails(self):
+        out = self.layout(f'<table style="height:420px">{self.ROWS}</table>')
+        self.assertTrue(any("引き伸ばされている" in l for l in out), out)
+
+    def test_natural_table_passes(self):
+        out = self.layout(f'<table>{self.ROWS}</table>')
+        self.assertFalse(any("引き伸ば" in l for l in out), out)
+
+    def test_legend_below_chart_warns(self):
+        out = self.layout(f'<div>{self.CHART}{self.LEGEND}</div>')
+        self.assertTrue(any("凡例がグラフの下" in l for l in out), out)
+
+    def test_legend_above_chart_passes(self):
+        out = self.layout(f'<div>{self.LEGEND}{self.CHART}</div>')
+        self.assertFalse(any("凡例がグラフの下" in l for l in out), out)
+
+    # 親クラスのテストを二重に回さない
+    test_unequal_contrast_columns_warn = test_equal_contrast_columns_pass = None
+    test_right_side_gap_warns = test_two_highlighted_rows_warn = test_std_page_skips_layout_checks = None
