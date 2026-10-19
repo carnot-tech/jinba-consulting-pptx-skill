@@ -488,3 +488,25 @@ class TableStretchAndLegend(LayoutFeedback20261012):
     # 親クラスのテストを二重に回さない
     test_unequal_contrast_columns_warn = test_equal_contrast_columns_pass = None
     test_right_side_gap_warns = test_two_highlighted_rows_warn = test_std_page_skips_layout_checks = None
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class ColumnRuleAlignment(LayoutFeedback20261012):
+    """check_layout：左右2列の最初の横罫の高さを揃える（§4.21 WARN）"""
+
+    AXH = '<div><div style="height:38px;border-bottom:1.8px solid #333;font-weight:700">工数の推移</div><div style="height:200px;background:#C5A681"></div></div>'
+    TBL = ('<table style="border-collapse:collapse"><tr><td style="border-top:1.8px solid #333">営業部</td><td style="border-top:1.8px solid #333">月に約120件</td></tr>'
+           '<tr><td>管理部</td><td>月に約40件</td></tr></table>')
+    HDR = '<div style="height:38px;border-bottom:1.8px solid #333;font-weight:700">部門ごとの件数</div>'
+
+    def cols(self, left, right):
+        return f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px"><div>{left}</div><div>{right}</div></div>'
+
+    def test_headerless_table_next_to_axis_title_warns(self):
+        out = self.layout(self.cols(self.AXH, self.TBL))
+        self.assertTrue(any("最初の横罫" in l for l in out), out)
+
+    def test_table_with_same_height_header_passes(self):
+        out = self.layout(self.cols(self.AXH, self.HDR + self.TBL.replace("border-top:1.8px solid #333", "")))
+        self.assertFalse(any("最初の横罫" in l for l in out), out)
+

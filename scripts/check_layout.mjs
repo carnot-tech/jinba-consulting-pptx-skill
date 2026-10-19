@@ -14,6 +14,7 @@
 //  12. 塗りで立てたハイライトが1ページに2か所以上（WARN。§4.57）
 //  13. 表の行を縦に引き伸ばしている（行の高さが中身より1.5行ぶん以上高い表は FAIL、1行ぶん以上は WARN。§4.12）
 //  14. 凡例がグラフより下に置かれている（WARN。§5.18: 凡例はグラフの見出しの上に右揃えで置く）
+//  15. 左右2列に並べたとき、列の最初の横罫（見出しの下罫・表の上罫）の高さがずれている（WARN。§4.21）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
 // 使い方: node scripts/check_layout.mjs deck.html   （playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
 import path from "node:path";
@@ -287,6 +288,41 @@ const { issues, warns } = await page.evaluate(() => {
             warnOut.push(`p${n}: 並べた要素（${side.length}個）の${what.join("・")}が揃っていない（§4.51: 対比の列・同格の箱は 1fr で同じ幅・高さに組む。意図した差なら無視してよい）`);
             break;
           }
+        }
+      }
+      // 15. 左右2列の最初の横罫の高さ（片側は軸タイトル付きの図、片側は見出しのない表、のような組み合わせで下罫の高さがずれる）
+      const firstRule = (c, cr) => {
+        let y = Infinity;
+        for (const el of [c, ...c.querySelectorAll("*")]) {
+          if (el !== c && el.closest("svg")) continue;
+          const st = getComputedStyle(el);
+          if (st.display === "none" || st.visibility === "hidden") continue;
+          const r = el.getBoundingClientRect();
+          // 列の幅の半分以上にわたる線だけを見る（表のセルは表全体の線の一部として数える）
+          const w = el.matches("th, td, tr") ? (el.closest("table")?.getBoundingClientRect().width ?? 0) : r.width;
+          if (w < cr.width * 0.5 || r.height === 0) continue;
+          if (parseFloat(st.borderTopWidth) >= 1 && st.borderTopStyle !== "none") y = Math.min(y, r.top);
+          if (parseFloat(st.borderBottomWidth) >= 1 && st.borderBottomStyle !== "none") y = Math.min(y, r.bottom);
+        }
+        return y - cr.top;
+      };
+      for (const g of s.querySelectorAll("*")) {
+        const gs = getComputedStyle(g);
+        const row = gs.display.includes("grid") || (gs.display.includes("flex") && !gs.flexDirection.startsWith("column"));
+        if (!row || g.closest("table, svg, .foot, .footer, footer, .src, h1, .title, .ttl")) continue;
+        const cols = [...g.children].filter((c) => {
+          const cs = getComputedStyle(c), r = c.getBoundingClientRect();
+          return cs.display !== "none" && cs.position !== "absolute" && r.width >= 120 && r.height >= 80 && (c.textContent || "").trim();
+        });
+        if (cols.length !== 2) continue;
+        const [ra, rb] = cols.map((c) => c.getBoundingClientRect());
+        if (Math.abs(ra.top - rb.top) > 4 || ra.right > rb.left + 1) continue; // 上端の揃った左右の列だけ
+        const ya = firstRule(cols[0], ra), yb = firstRule(cols[1], rb);
+        // どちらも列の上のほう（見出しの位置）に横罫があるときだけ比べる
+        if (!(ya <= 90 && yb <= 90)) continue;
+        if (Math.abs(ya - yb) > 4) {
+          warnOut.push(`p${n}: 左右の列の最初の横罫の高さが ${Math.round(Math.abs(ya - yb))}px ずれている（§4.21: 見出しの下罫・表の上罫の高さを揃える。見出しのない側にも同じ高さの見出し行を置く）`);
+          break;
         }
       }
       // 11. 片側だけの空き：タイトルの横幅を基準に、本文の文字・図形が占める横の範囲の外側を測る
