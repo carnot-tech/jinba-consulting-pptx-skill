@@ -77,14 +77,13 @@ td.b{font-weight:700;color:var(--navy)}
 tr:last-child td{border-bottom:0}
 td.ax{font-size:14.5pt;font-weight:700;color:var(--accent);font-family:var(--font-serif);border-right:1.8px solid var(--navy)}
 th.ax{border-right:1.8px solid var(--navy)}
-.c>table{flex:0 0 auto;height:auto}
-.c:has(>table){justify-content:center}
+/* 表は中身の高さのまま上下中央に置く。容器ごと中央寄せすると出典(.src)まで持ち上がるので、表自身の上下 margin:auto で寄せる（§4.12・§4.47） */
+.c>table{flex:0 0 auto;height:auto;margin:auto 0}
 /* 列の内容が同種（時点・案など）なら等幅にする。最後の列だけに余白を吸わせて右側を空けない（§4.12） */
 table.eq{table-layout:fixed}
 /* 表を縦に伸ばすと余剰高さが見出し行にも配分され見出しが沈む（slide-rules §4.21） */
 .c>table tr:first-child,.side .sb table tr:first-child{height:1px}
-.side .sb table{flex:0 0 auto;height:auto}
-.side .sb:has(>table){justify-content:center}
+.side .sb>table{flex:0 0 auto;height:auto;margin:auto 0}
 .chev{display:flex;gap:0;flex:0 0 auto}
 .chev .cv{flex:1;position:relative;background:var(--soft);border:0;padding:5mm 4mm 5mm 9mm;clip-path:polygon(0 0,calc(100% - 6mm) 0,100% 50%,calc(100% - 6mm) 100%,0 100%,6mm 50%);display:flex;flex-direction:column}
 .chev .cv:first-child{clip-path:polygon(0 0,calc(100% - 6mm) 0,100% 50%,calc(100% - 6mm) 100%,0 100%);padding-left:5mm}

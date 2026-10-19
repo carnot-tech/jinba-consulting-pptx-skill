@@ -13,7 +13,7 @@
 //  11. 版面の右側・左側の片方だけが大きく空いている（WARN。§4.54）
 //  12. 塗りで立てたハイライトが1ページに2か所以上（WARN。§4.57）
 //  13. 表の行を縦に引き伸ばしている（行の高さが中身より1.5行ぶん以上高い表は FAIL、1行ぶん以上は WARN。§4.12）
-//  14. 凡例がグラフより下にある（WARN。§5.18）
+//  14. 凡例がグラフより下に置かれている（WARN。§5.18: 凡例はグラフの見出しの上に右揃えで置く）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
 // 使い方: node scripts/check_layout.mjs deck.html   （playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
 import path from "node:path";
@@ -113,17 +113,27 @@ const { issues, warns } = await page.evaluate(() => {
       }
     }
     // 13. 表の行の縦の引き伸ばし（§4.12）: 行の高さのうち、一番高いセルの中身と上下の余白を超える分を1行の高さで割る
+    // 見出し行（全セルが th）だけを除く。行見出しに th を使う行は対象に含める
+    // 中身の高さは文字の行ボックスに、セル内のブロック要素（ul・p 等）の上下 margin を足して測る
     for (const t of std ? [] : s.querySelectorAll("table")) {
       const ratios = [];
-      for (const r of [...t.rows].filter((r) => !r.querySelector("th"))) {
+      for (const r of [...t.rows].filter((r) => r.cells.length && ![...r.cells].every((c) => c.tagName === "TH"))) {
         const rh = r.getBoundingClientRect().height;
         let need = 0, line = 0;
         for (const c of r.cells) {
           const rg = document.createRange(); rg.selectNodeContents(c);
           const rs = [...rg.getClientRects()].filter((x) => x.height > 0 && x.width > 0);
           if (!rs.length) continue;
+          let top = Math.min(...rs.map((x) => x.top)), bot = Math.max(...rs.map((x) => x.bottom));
+          for (const ch of c.querySelectorAll("*")) {
+            const cr = ch.getBoundingClientRect();
+            if (!cr.height) continue;
+            const ms = getComputedStyle(ch);
+            top = Math.min(top, cr.top - Math.max(0, parseFloat(ms.marginTop) || 0));
+            bot = Math.max(bot, cr.bottom + Math.max(0, parseFloat(ms.marginBottom) || 0));
+          }
           const cs = getComputedStyle(c);
-          need = Math.max(need, Math.max(...rs.map((x) => x.bottom)) - Math.min(...rs.map((x) => x.top)) + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom));
+          need = Math.max(need, bot - top + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom));
           line = Math.max(line, parseFloat(cs.fontSize) * 1.5);
         }
         if (rh > 0 && need > 0 && line > 0) ratios.push(Math.max(0, rh - need) / line);
@@ -134,29 +144,36 @@ const { issues, warns } = await page.evaluate(() => {
       if (med >= 1.5) out.push(`p${n}: 表の行が中身より約${med.toFixed(1)}行ぶん高く、縦に引き伸ばされている（§4.12: 行の高さは中身なりにし、空くなら文字を一段大きくして縦中央に置く）`);
       else if (med >= 1.0) warnOut.push(`p${n}: 表の行が中身より約${med.toFixed(1)}行ぶん高い（§4.12: 引き伸ばしの疑い）`);
     }
-    // 14. 凡例の位置（§5.18）: 凡例がグラフ（SVG・塗りの棒）より下にある
-    const isLegend = (el) => /legend|(^|[\s_-])lg([\s_-]|$)/i.test(typeof el.className === "string" ? el.className : "");
+    // 14. 凡例の位置（§5.18）: 凡例がグラフ（SVG・canvas、または同じ幅か高さで並ぶ2本以上の塗りの棒・セル）より下にある
+    // 凡例の判定はクラス名のトークン単位（legend を含むか lg そのもの）。text-lg・col-lg-6 等は凡例とみなさない
+    // グラフは凡例の親から3階層まで（section 自身を含む）で探す。数値タイル・カード1枚のような塗りの箱1つはグラフとみなさない
+    const isLegend = (el) => [...(el.classList || [])].some((t) => /legend/i.test(t) || /^lg$/i.test(t));
     for (const lg of std ? [] : s.querySelectorAll("*")) {
       if (!isLegend(lg) || (lg.parentElement && lg.parentElement.closest("[class*=legend]"))) continue;
       const lr = lg.getBoundingClientRect();
       if (!lr.height) continue;
       let scope = lg.parentElement, chartBottom = null;
-      for (let k = 0; k < 3 && scope && scope !== s && chartBottom === null; k++, scope = scope.parentElement) {
+      for (let k = 0; k < 3 && scope && chartBottom === null; k++, scope = scope === s ? null : scope.parentElement) {
         let bot = -Infinity;
+        const boxes = [];
         for (const e of scope.querySelectorAll("svg, canvas, div, span, i")) {
-          if (lg.contains(e) || e.closest("table")) continue;
+          if (lg.contains(e) || e.closest("table") || e.closest(".foot, .footer")) continue;
           const r = e.getBoundingClientRect();
           if (!r.width || !r.height) continue;
-          const media = /^(svg|canvas)$/i.test(e.tagName) && r.width > 60 && r.height > 40;
+          if (/^(svg|canvas)$/i.test(e.tagName) && r.width > 60 && r.height > 40) { bot = Math.max(bot, r.bottom); continue; }
           const bg = getComputedStyle(e).backgroundColor;
           const filled = bg && bg !== "transparent" && !/rgba\([^)]*,\s*0\)$/.test(bg) && !/rgb\(255, 255, 255\)/.test(bg);
-          if (!media && !(filled && (r.width > 30 || r.height > 30) && r.width < sr.width * 0.6)) continue;
-          bot = Math.max(bot, r.bottom);
+          // 棒・ヒートマップのセルは文字が少ない（値ラベル程度）。文章の入った箱はグラフに数えない
+          if (filled && (r.width > 30 || r.height > 30) && r.width < sr.width * 0.6 && (e.textContent || "").trim().length <= 8) boxes.push(r);
         }
+        // 同じ幅（縦棒）か同じ高さ（横棒・セル）の塗りの箱が2つ以上あるときだけ、グラフとみなす
+        const same = (a, b) => Math.abs(a - b) <= 1;
+        const bars = boxes.filter((a) => boxes.some((b) => b !== a && (same(a.width, b.width) || same(a.height, b.height))));
+        for (const r of bars) bot = Math.max(bot, r.bottom);
         if (isFinite(bot)) chartBottom = bot;
       }
       if (chartBottom !== null && lr.top >= chartBottom - 2) {
-        warnOut.push(`p${n}: 凡例がグラフの下にある「${(lg.textContent || "").trim().replace(/\s+/g, " ").slice(0, 24)}」（§5.18: 凡例はグラフの右上に置く）`);
+        warnOut.push(`p${n}: 凡例がグラフの下にある「${(lg.textContent || "").trim().replace(/\s+/g, " ").slice(0, 24)}」（§5.18: 凡例はグラフの見出しの上に右揃えで置く）`);
       }
     }
     // 5. 中身の無い列が残ったグリッド

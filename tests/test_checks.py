@@ -438,7 +438,7 @@ class LayoutFeedback20261012(unittest.TestCase):
 
 @unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
 class TableStretchAndLegend(LayoutFeedback20261012):
-    """check_layout：表を縦に引き伸ばさない（§4.12 FAIL）／凡例はグラフの右上（§5.18 WARN）"""
+    """check_layout：表を縦に引き伸ばさない（§4.12 FAIL）／凡例はグラフの見出しの上に右揃え（§5.18 WARN）"""
 
     ROWS = '<tr><th>部門</th><th>件数</th></tr><tr><td>営業部</td><td>月に約120件</td></tr><tr><td>管理部</td><td>月に約40件</td></tr>'
     CHART = '<svg viewBox="0 0 400 200" style="height:70mm"><rect x="20" y="40" width="80" height="160" fill="#5A3921"/><rect x="160" y="100" width="80" height="100" fill="#C5A681"/></svg>'
@@ -459,6 +459,31 @@ class TableStretchAndLegend(LayoutFeedback20261012):
     def test_legend_above_chart_passes(self):
         out = self.layout(f'<div>{self.LEGEND}{self.CHART}</div>')
         self.assertFalse(any("凡例がグラフの下" in l for l in out), out)
+
+    def test_row_header_th_table_is_checked(self):
+        rows = '<tr><th>部門</th><th>件数</th></tr><tr><th>営業部</th><td>月に約120件</td></tr><tr><th>管理部</th><td>月に約40件</td></tr>'
+        out = self.layout(f'<table style="height:420px">{rows}</table>')
+        self.assertTrue(any("引き伸ばされている" in l for l in out), out)
+
+    def test_natural_table_with_list_cells_passes(self):
+        rows = ('<tr><th>部門</th><th>課題</th></tr>'
+                '<tr><td>営業部</td><td><ul><li>入力の二重化</li><li>集計の手作業</li></ul></td></tr>'
+                '<tr><td>管理部</td><td><ul><li>承認の待ち</li><li>差し戻し</li></ul></td></tr>')
+        out = self.layout(f'<table>{rows}</table>')
+        self.assertFalse(any("引き伸ば" in l or "行ぶん高い" in l for l in out), out)
+
+    def test_lg_size_class_is_not_a_legend(self):
+        out = self.layout(f'<div>{self.CHART}<div class="text-lg">図の読み方の補足</div></div>')
+        self.assertFalse(any("凡例がグラフの下" in l for l in out), out)
+
+    def test_legend_under_single_tile_is_not_below_chart(self):
+        tile = '<div style="background:#5A3921;color:#fff;width:60mm;height:30mm">月に約120件の問い合わせ</div>'
+        out = self.layout(f'<div>{tile}{self.LEGEND}</div>')
+        self.assertFalse(any("凡例がグラフの下" in l for l in out), out)
+
+    def test_legend_directly_in_section_below_chart_warns(self):
+        out = self.layout(f'{self.CHART}{self.LEGEND}')
+        self.assertTrue(any("凡例がグラフの下" in l for l in out), out)
 
     # 親クラスのテストを二重に回さない
     test_unequal_contrast_columns_warn = test_equal_contrast_columns_pass = None
