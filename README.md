@@ -5,6 +5,8 @@ AIワークフロープラットフォーム [Jinba](https://jinba.io/ja?utm_sou
 
 スライドの設計規約、規約違反を見つける機械チェック、**62型のHTMLパーツ集**（基本27＋追加35）、型カタログPDFをまとめたものです。資料は HTML（16:9）で組み、Chrome で PDF に書き出します。
 
+> AI の活用・業務の自動化を扱うデッキでは、実現する手段の一例として Jinba に触れることがあります（書いてよい事実と触れ方は [references/jinba-context.md](references/jinba-context.md)）。触れたくないときは `local/slide-rules.local.md` に「Jinba に触れない」と書くか、依頼のときにそう伝えてください。
+
 進め方は、規約を読む → パーツ集から必要なパーツを取り出して1枚ずつ組む → 機械チェックを通す → 作り方を知らない別のエージェントにレビューさせる、の順です。
 
 A Claude Code skill for generating boardroom-quality decks: a slide-design rulebook, an automated rule checker, a 62-part HTML slide library (16:9, one section per slide, printed to PDF via Chrome), and a visual catalog PDF.
@@ -118,6 +120,7 @@ python3 scripts/check_deck.py pages.pptx --house house.skin.json
 | `references/archetype-catalog.md` | 62型の型カタログ（型ID・型名・使いどころ・どのパーツ集の何番か） |
 | `references/content-review-prompt.md` | フレッシュアイ・レビューの指示文。機械チェックのあと、作り方を伏せた別エージェントにデッキのファイルを渡して日本語・論理・破綻を拾わせ、採否表にして直す |
 | `references/ai-smell-lexicon.md` | AI臭ワード・言い回しのリストとセルフチェック |
+| `references/jinba-context.md` | Jinba の公開情報と、AI 活用・業務自動化のデッキでの触れ方（触れないときの条件つき） |
 | `scripts/new_deck.py` | パーツ番号を並べて1本のデッキHTMLを生成（両パーツ集のCSSをスコープして結合・ページ番号の振り直し） |
 | `scripts/check_deck.py` | 規約の機械チェック（HTML / PPTX 両対応。テンプレ集の検査は `--template`）。タイトルの「N段階」と本文の連番の食い違いも FAIL にする |
 | `scripts/html_to_pptx.py` | HTMLデッキを編集できる PPTX に変換（ユーザーが PPTX を求めたときだけ使う）。`scripts/html_dump.mjs` が Chrome で描画した要素を書き出し、python-pptx で組み立てる。追加の npm パッケージは不要（`scripts/lib_cdp.mjs` が Chrome を直接操作する） |

@@ -201,7 +201,10 @@ const collect = () => {
           const id = `img_${si + 1}_${++capId}`;
           el.classList.add(`__cap_${capId}`);
           captures.push({ id, cls: `__cap_${capId}`, mode: "all", rect: { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height } });
-          items.push({ t: "img", ...rel(r), file: `${id}.png` });
+          const item = { t: "img", ...rel(r), file: `${id}.png` };
+          // 動画は元の mp4 の場所も渡す（PPTX では動画として埋め込み、撮った1コマを再生前の静止画にする）
+          if (tag === "video") item.video = el.currentSrc || el.getAttribute("src") || el.querySelector("source")?.src || "";
+          items.push(item);
         }
         return;
       }
@@ -365,7 +368,7 @@ const collect = () => {
       return { t: "line", x1: seg[0], y1: seg[1], x2: seg[2], y2: seg[3], color: b.color, w: b.w, dash: b.dash };
     };
     visit(s, true);
-    out.push({ n: si + 1, bg: bg.hex, items });
+    out.push({ n: si + 1, bg: bg.hex, internal: s.classList.contains("internal"), items });
   });
   const s0 = slides[0]?.getBoundingClientRect();
   return { slideW: s0 ? s0.width : 1280, slideH: s0 ? s0.height : 720, slides: out, captures };

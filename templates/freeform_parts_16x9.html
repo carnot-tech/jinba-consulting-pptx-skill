@@ -42,7 +42,7 @@ html,body{margin:0;background:var(--page-bg);font-family:var(--font-sans);color:
 /* 本文ページの上部帯は右上のラベルだけを見せる（資料名はフッターにあるので出さない・罫線も引かない — slide-rules §4.62） */
 .s:not(.cover):not(.chap) .bar{border-bottom:0}
 .s:not(.cover):not(.chap) .bar .logo{visibility:hidden}
-h1{margin:4.5mm 0 0 0;font-family:var(--font-serif);font-size:22pt;line-height:1.3;color:var(--navy);font-weight:600;flex:0 0 auto} /* 2行まで可（意味の切れ目で <br>。slide-rules §2.1） */
+h1{margin:4.5mm 0 0 0;font-family:var(--font-serif);font-size:22pt;line-height:1.3;color:var(--navy);font-weight:600;flex:0 0 auto;word-break:auto-phrase} /* 2行まで可。折り返しは文節単位（auto-phrase・lang="ja" が前提）に任せ、<br> は泣き別れのときだけ（slide-rules §2.13） */
 .c{margin-top:6mm;flex:1;min-height:0;display:flex;flex-direction:column;gap:5mm;margin-bottom:19mm}
 .c>.grid{flex:1;grid-auto-rows:1fr;min-height:0}
 .c>.grid.fix{flex:0 0 auto}
@@ -207,6 +207,8 @@ td ul.cb{margin:0;padding-left:4mm;line-height:1.6}
 td ul.cb li{margin:0 0 1mm 0}
 /* ハーベイボール列は見出しも玉も水平中央 */
 th.hbc,td.hbc{text-align:center}
+/* 社外向けに書き出すときは body に class="external" を付けて印刷すると、社内用のページ（section.internal）が外れる（slide-rules §8） */
+body.external section.internal{display:none!important}
 </style></head><body>
 
 <!-- ═══ パーツ01: 表紙 ═══ -->

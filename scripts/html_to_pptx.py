@@ -4,6 +4,7 @@
 使い方:
   python3 html_to_pptx.py deck.html                 # deck.pptx を同じフォルダに出力
   python3 html_to_pptx.py deck.html out.pptx
+  python3 html_to_pptx.py deck.html out.pptx --external   # 社内用のページ（section.internal）を除いて書き出す
 
 前提: 資料は HTML で仕上げてから変換する（slide-rules §8.6）。変換は、ユーザーが PPTX を明示的に求めたときだけ行う。
 仕組み: html_dump.mjs が Chrome で描画した要素の位置と見た目を書き出し、本スクリプトが PowerPoint の図形に組み立てる。
@@ -11,6 +12,7 @@
   塗り・枠 → 四角形（角丸・多角形の clip-path は形状として再現）／片側だけの罫線 → 直線
   表 → PowerPoint の表（結合セル・セルの塗り・罫線・余白を保持）
   SVG・画像・背景画像 → 透過PNG（中の数値は編集できない）
+  動画（<video>）→ 動画として埋め込み、描画された1コマを再生前の静止画にする（元ファイルが手元にあるとき）
 依存: Node 22+ と Chrome（html_dump.mjs）、python-pptx。
 """
 import json
@@ -18,6 +20,8 @@ import re
 import subprocess
 import sys
 import tempfile
+import unicodedata
+from urllib.parse import unquote, urlparse
 from pathlib import Path
 
 from lxml import etree
@@ -270,7 +274,23 @@ def add_table(slide, it, sc):
             endp.set("sz", str(int(size * 100)))
 
 
-def convert(html, out):
+MAIL_LIMIT_MB = 10  # これを超えるとメールに添付できないことが多い
+
+VIDEO_MIME = {".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm"}
+
+
+def local_media(src, html):
+    """<video> の src（file:// URL・相対パス）を手元のファイルに解決する。http(s) は埋め込まない。"""
+    if not src:
+        return None
+    u = urlparse(src)
+    if u.scheme in ("http", "https"):
+        return None
+    p = Path(unquote(u.path)) if u.scheme == "file" else (Path(html).resolve().parent / unquote(src))
+    return p if p.exists() and p.suffix.lower() in VIDEO_MIME else None
+
+
+def convert(html, out, external=False):
     here = Path(__file__).resolve().parent
     with tempfile.TemporaryDirectory() as td:
         r = subprocess.run(["node", str(here / "html_dump.mjs"), str(Path(html).resolve()), td],
@@ -282,7 +302,11 @@ def convert(html, out):
         prs = Presentation()
         prs.slide_width, prs.slide_height = SLIDE_W, SLIDE_H
         blank = prs.slide_layouts[6]
+        n = 0
         for s in data["slides"]:
+            if external and s.get("internal"):
+                continue  # 社内用のページ（slide-rules §8 渡し方）
+            n += 1
             slide = prs.slides.add_slide(blank)
             slide.background.fill.solid()
             slide.background.fill.fore_color.rgb = rgb(s["bg"])
@@ -296,7 +320,14 @@ def convert(html, out):
                     add_line(slide, it, sc)
                 elif t == "img":
                     p = Path(td) / it["file"]
-                    if p.exists():
+                    mv = local_media(it.get("video"), html)
+                    if mv:
+                        slide.shapes.add_movie(str(mv), sc(it["x"]), sc(it["y"]), sc(it["w"]), sc(it["h"]),
+                                               poster_frame_image=str(p) if p.exists() else None,
+                                               mime_type=VIDEO_MIME[mv.suffix.lower()])
+                    elif p.exists():
+                        if it.get("video"):
+                            print(f"WARN  p{s['n']}: 動画の元ファイルが手元に無いので静止画で置いた: {it['video'][:80]}")
                         slide.shapes.add_picture(str(p), sc(it["x"]), sc(it["y"]), sc(it["w"]), sc(it["h"]))
                 elif t == "table":
                     add_table(slide, it, sc)
@@ -304,16 +335,22 @@ def convert(html, out):
                 if it["t"] == "text" and it["paras"]:
                     add_text(slide, it, sc)
         prs.save(out)
-    return len(data["slides"])
+    mb = Path(out).stat().st_size / 1e6
+    if mb > MAIL_LIMIT_MB:
+        print(f"WARN  {out} が {mb:.1f}MB（{MAIL_LIMIT_MB}MB を超えるとメールで送れないことが多い。動画・画像を軽くするか、共有リンクで渡す）")
+    return n
 
 
 def main():
     args = sys.argv[1:]
+    external = "--external" in args
+    args = [a for a in args if a != "--external"]
     if not args:
         sys.exit(__doc__)
     html = args[0]
     out = args[1] if len(args) > 1 else str(Path(html).with_suffix(".pptx"))
-    n = convert(html, out)
+    out = unicodedata.normalize("NFC", out)  # Windows で日本語のファイル名が化けないように（slide-rules §8）
+    n = convert(html, out, external)
     print(f"{n} slides → {out}")
     print("次: check_deck.py で検査し、PowerPoint で開いて折り返しと重なりを確認する（slide-rules §8.6）")
 
