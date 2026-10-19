@@ -4,9 +4,9 @@ new_deck.py — 2つのパーツ集から必要なパーツだけを取り出し
 
   python3 scripts/new_deck.py --parts b01,b02,m05,b06,m10,b09,b10 --title "資料名" -o mydeck.html
 
-  b01〜b27 = templates/freeform_parts_16x9.html（基本パーツ集）のパーツ番号
+  b01〜b30 = templates/freeform_parts_16x9.html（基本パーツ集）のパーツ番号
   m01〜m35 = templates/freeform_parts_more_16x9.html（追加パーツ集）のパーツ番号
-  番号は references/archetype-catalog.md と assets/SlideCatalog_16x9.pdf のページ順（基本 P.1〜27、追加 P.28〜62 → m01〜m35）
+  番号は references/archetype-catalog.md と assets/SlideCatalog_16x9.pdf のページ順（基本 P.1〜30、追加 P.31〜65 → m01〜m35）
 
 出力は単体HTML。2つのパーツ集はCSSの設計が違う（基本＝.s / 追加＝.slide）ので、
 基本パーツ集の要素セレクタ（h1・table・th・td など）は .s 配下に、追加パーツ集の * / body は .slide 配下に

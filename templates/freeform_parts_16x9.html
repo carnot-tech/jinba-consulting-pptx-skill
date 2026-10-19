@@ -202,6 +202,61 @@ table.eq{table-layout:fixed}
 .agd .ai.on .at{font-size:21pt}
 .agd .ai.on .ap{color:var(--muted)}
 
+/* 縦横に項目を並べる図の軸（パーツ28・29）。左上に縦軸の名前、上の帯に横軸の名前と向き（slide-rules §4.98）。
+   見出しの下罫の高さは .axh と同じ（右に .axh を並べたとき線が揃う。§4.21） */
+.gx-c{grid-row:1;grid-column:1;box-sizing:border-box;border-bottom:1.8px solid var(--navy);border-right:1.8px solid var(--navy);display:flex;align-items:flex-end;padding:0 2mm 1.5mm 0;font-size:11.5pt;font-weight:700;line-height:1.3;color:var(--navy)}
+.gx-f{grid-row:1;grid-column:2/-1;box-sizing:border-box;border-bottom:1.8px solid var(--navy);display:flex;align-items:flex-end;gap:3mm;padding:0 0 1.5mm 4mm;font-size:11.5pt;font-weight:700;line-height:1.3;color:var(--navy)}
+.gx-f .gx-a{flex:1;height:1.3em;display:flex;align-items:center}
+.gx-f .gx-a i{flex:1;height:1.2px;background:var(--accent)} /* 罫線と取り違えないよう塗りで引く */
+.gx-f .gx-a b{width:2.4mm;height:2.8mm;background:var(--accent);clip-path:polygon(0 0,100% 50%,0 100%)}
+.gx-l{grid-column:1;box-sizing:border-box;border-right:1.8px solid var(--navy);display:flex;align-items:center;padding-right:2mm;font-family:var(--font-serif);font-size:11.5pt;font-weight:700;line-height:1.4;color:var(--accent)}
+.gx-hr{grid-column:1/-1;align-self:start;border-top:1px solid var(--rule)}
+
+/* スイムレーン＋番号の付箋（パーツ28）。格子の寸法（見出し 9mm・レーン 28mm・列 40mm）と矢印の SVG の座標（単位 mm）を揃えてある */
+.slw{display:grid;grid-template-columns:186mm 1fr;gap:8mm;align-items:start;flex:0 0 auto;margin:auto 0}
+.sl{position:relative;display:grid;grid-template-columns:26mm repeat(4,40mm);grid-template-rows:9mm repeat(3,28mm)}
+.sl-c{display:flex;align-items:center;justify-content:center}
+.sl-b{position:relative;width:34mm;height:18mm;box-sizing:border-box;background:var(--soft);padding:2mm 4.5mm 2mm 3mm;display:flex;flex-direction:column;justify-content:center;gap:.8mm}
+.sl-b b{font-size:10pt;font-weight:700;line-height:1.35;color:var(--navy)}
+.sl-b .io{font-size:9pt;line-height:1.35;color:var(--muted)}
+.sl-d{width:26mm;height:18mm;background:var(--soft);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);display:flex;align-items:center;justify-content:center;text-align:center;font-size:9pt;font-weight:700;color:var(--navy)}
+.sl svg{position:absolute;left:0;top:0;width:186mm;height:93mm;overflow:visible;pointer-events:none}
+/* 付箋＝番号のチップ。色は種類（課題／適用例）だけを表し、凡例を置く（§5.2）。大きさは本文の文字の高さ程度まで（§4.95） */
+.sl-n{width:4.6mm;height:4.6mm;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:8.5pt;font-weight:700;font-style:normal;line-height:1;color:#fff;background:var(--accent)}
+.sl-n.ap{background:var(--cyan);color:var(--navy)}
+.sl-b .sl-n{position:absolute;top:-2.3mm;right:-2.3mm}
+.sl-ls{display:flex;flex-direction:column}
+/* 一覧の番号は文字と別の要素にし、文字との間を1文字ぶん（1em）空ける（§4.95） */
+.sl-it{display:flex;align-items:flex-start;gap:1em;padding:3.2mm 0;border-top:1px solid var(--rule);font-size:11pt;line-height:1.6;color:var(--ink)}
+.sl-it .sl-n{margin-top:.8mm}
+.axh+.sl-it{border-top:0;padding-top:0}
+
+/* 表と裏の2段（パーツ29）。上段と下段は同じ列に置き、列の中心で縦に対応させる */
+.tt{display:grid;grid-template-columns:32mm repeat(4,1fr);grid-template-rows:9mm auto 14mm auto;flex:0 0 auto;margin:auto 0}
+.tt-cv{grid-row:2;margin:4mm 0 0 3mm;min-height:24mm;box-sizing:border-box;background:var(--soft);clip-path:polygon(0 0,calc(100% - 5mm) 0,100% 50%,calc(100% - 5mm) 100%,0 100%,5mm 50%);padding:3mm 7mm 3mm 8.5mm;display:flex;align-items:center;gap:1em}
+.tt-cv.first{clip-path:polygon(0 0,calc(100% - 5mm) 0,100% 50%,calc(100% - 5mm) 100%,0 100%);padding-left:4mm}
+.tt-cv .n{flex:0 0 auto;font-size:13pt;font-weight:700;color:var(--accent)}
+.tt-cv .t{font-size:12pt;font-weight:700;line-height:1.4;color:var(--navy)}
+.tt-dn{grid-row:3;margin-left:3mm;display:flex;align-items:center;justify-content:center}
+.tt-dn i{width:9mm;height:5mm;background:var(--cyan);clip-path:polygon(0 0,100% 0,50% 100%)}
+.tt-bk{grid-row:4;margin-left:3mm;display:flex;flex-direction:column}
+.tt-bk b{font-size:12pt;font-weight:700;line-height:1.4;color:var(--navy);border-bottom:1.8px solid var(--navy);padding-bottom:1.5mm;margin-bottom:2.5mm}
+.tt-bk ul{margin:0;padding-left:4.5mm;font-size:11.5pt;line-height:1.7;color:var(--ink)}
+.tt-bk li{margin-bottom:1.5mm}
+
+/* 一問一答（パーツ30）。質問と回答の間は細い点線、行の罫線は点線の位置で切る（§6 縦の区切り線）。行の高さは揃える */
+.qa{display:flex;flex-direction:column;flex:0 0 auto;margin:auto 0}
+.qa-h,.qa-r{display:grid;grid-template-columns:1fr 8mm 1.3fr}
+.qa-b{display:grid;grid-auto-rows:1fr}
+.qa-q,.qa-a{border-top:1px solid var(--rule);padding:3.5mm 0;display:flex;align-items:center}
+.qa-h .axh{margin-bottom:0}
+.qa-r:first-child>.qa-q,.qa-r:first-child>.qa-a{border-top:0}
+.qa-q>div{display:flex;align-items:baseline;gap:1em;font-size:11.5pt;font-weight:700;line-height:1.6;color:var(--navy)}
+.qa-q .qa-n{flex:0 0 auto;font-family:var(--font-serif);font-style:normal;color:var(--accent)}
+.qa-v{justify-self:center;border-left:1px dotted var(--muted)}
+.qa-a ul{margin:0;padding-left:4.5mm;font-size:11.5pt;line-height:1.6;color:var(--ink)}
+.qa-a li{margin:.5mm 0}
+
 /* 表の詳細セル（理由・前提・読み取り）はブレット2〜3行で書く（slide-rules §6） */
 td ul.cb{margin:0;padding-left:4mm;line-height:1.6}
 td ul.cb li{margin:0 0 1mm 0}
@@ -799,6 +854,119 @@ th.hbc,td.hbc{text-align:center}
     </div>
   </div>
   <div class="foot"><b>資料名</b><span>27</span></div>
+</section>
+
+<!-- ═══ パーツ28: スイムレーン＋番号の付箋（課題・適用例を工程に重ね、右に番号つきの一覧） ═══
+     使いどころ: 業務の流れのどこに課題があり、どこに何を当てるかを1枚で見せる。縦＝担い手（部署・役割・システム）、横＝業務の流れ（slide-rules §4.77）。
+     縦軸・横軸の名前（左上の「担い手」、上の帯の「業務の流れ」）は図の中に書く（§4.98）。領域で分けるなら左上を「領域」にする。
+     付箋は番号だけを工程の箱の右上に重ね、中身は右の一覧に同じ番号で書く。付箋の色は種類（課題／適用例）だけを表し、凡例を置く（§5.2）。
+     番号のチップは文字と別の要素にし、文字との間を1文字ぶん空ける（§4.95）。他のページからはこの番号で指す（§4.98）。
+     各工程には、渡すもの（ファイルなら形式も）を2行目に書く（§4.77）。条件分岐は本流の中にひし形で入れ、分岐先も同じ図の中に置く。
+     現状の業務の図には、提案する仕組みを混ぜない（現状と導入後は別のページにする）。
+     箱は .sl の格子（見出し 9mm・レーン 28mm・列 40mm）に置き、矢印は同じ寸法の SVG（単位 mm）で引く。箱を動かしたら SVG の座標も直す。線の曲がりは1回まで（§5.14）。 -->
+<section class="s">
+  <div class="bar"><div class="logo">資料名</div><div class="date">パーツ28｜スイムレーン＋番号の付箋</div></div>
+  <h1>スイムレーン＋番号の付箋（課題・適用例を工程に重ね、右に一覧）</h1>
+  <div class="c">
+    <div class="slw">
+      <div class="sl">
+        <div class="gx-c">担い手</div>
+        <div class="gx-f"><span>業務の流れ</span><span class="gx-a"><i></i><b></b></span></div>
+        <div class="gx-l" style="grid-row:2">ラベル 1</div>
+        <div class="gx-l" style="grid-row:3">ラベル 2</div>
+        <div class="gx-l" style="grid-row:4">ラベル 3</div>
+        <div class="gx-hr" style="grid-row:3"></div>
+        <div class="gx-hr" style="grid-row:4"></div>
+        <div class="sl-c" style="grid-row:2;grid-column:2"><div class="sl-b"><b>Text 1</b><span class="io">→ ラベル 4（Excel）</span><i class="sl-n">1</i></div></div>
+        <div class="sl-c" style="grid-row:3;grid-column:3"><div class="sl-b"><b>Text 2</b><span class="io">→ ラベル 5（PDF）</span><i class="sl-n">2</i></div></div>
+        <div class="sl-c" style="grid-row:3;grid-column:4"><div class="sl-d">ラベル 6</div></div>
+        <div class="sl-c" style="grid-row:3;grid-column:5"><div class="sl-b"><b>Text 3</b><span class="io">→ ラベル 7</span><i class="sl-n ap">3</i></div></div>
+        <div class="sl-c" style="grid-row:4;grid-column:5"><div class="sl-b"><b>Text 4</b><span class="io">→ ラベル 8</span><i class="sl-n ap">4</i></div></div>
+        <svg viewBox="0 0 186 93" aria-hidden="true">
+          <defs><marker id="b28-ah" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="2.4" markerHeight="2.4" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker></defs>
+          <g fill="none" stroke="var(--accent)" stroke-width="0.35" marker-end="url(#b28-ah)">
+            <path d="M46,32 V51 H69"/>
+            <path d="M103,51 H113"/>
+            <path d="M139,51 H149"/>
+            <path d="M126,60 V79 H149"/>
+          </g>
+          <g font-size="3.2" fill="var(--ink)">
+            <text x="140.2" y="49.2">はい</text>
+            <text x="127.6" y="63.6">いいえ</text>
+          </g>
+        </svg>
+      </div>
+      <div class="sl-ls">
+        <div class="legend"><span><i style="background:var(--accent)"></i>課題</span><span><i style="background:var(--cyan)"></i>適用例</span></div>
+        <div class="axh"><span>課題と適用例</span></div>
+        <div class="sl-it"><i class="sl-n">1</i><span>Text 5</span></div>
+        <div class="sl-it"><i class="sl-n">2</i><span>Text 6</span></div>
+        <div class="sl-it"><i class="sl-n ap">3</i><span>Text 7</span></div>
+        <div class="sl-it"><i class="sl-n ap">4</i><span>Text 8</span></div>
+      </div>
+    </div>
+    <div class="src">出典：Source 1</div>
+  </div>
+  <div class="foot"><b>資料名</b><span>28</span></div>
+</section>
+
+<!-- ═══ パーツ29: 表と裏の2段（上段に利用者から見た流れ、下段に裏側の処理を縦に対応） ═══
+     使いどころ: 利用者が操作する順番（上段の矢羽）と、その裏で動く処理（下段）を同じ列に置き、縦に対応させて1枚で見せる。
+     変更を指示したときに何がどう変わるかを見せる前後の比較にも使う。行の名前を「指示する前」「指示した後」にし、
+     列は同じ手順のまま、変わったところだけ太字にする（§4.85。塗りで立てない）。変わらない列は前と同じ文言を残す。
+     縦軸（左上の「表と裏」と各行の名前）と横軸（上の帯の名前と向き）は図の中に書く（§4.98）。前後の比較では左上を「指示の前後」にする。段は4つまで（§4.26 の横に並べてよい条件）。
+     上段と下段は1対1。1つの処理が2つの手順にまたがるときは、下段の箱を grid-column で2列ぶんにし、点線の枠で括って凡例を置く（§6 またがる行）。
+     番号は文字と別の要素にし、文字との間を1文字ぶん空ける（§4.95）。 -->
+<section class="s">
+  <div class="bar"><div class="logo">資料名</div><div class="date">パーツ29｜表と裏の2段</div></div>
+  <h1>表と裏の2段（利用者から見た流れ／裏側の処理を縦に対応）</h1>
+  <div class="c">
+    <div class="tt">
+      <div class="gx-c">表と裏</div>
+      <div class="gx-f"><span>手順</span><span class="gx-a"><i></i><b></b></span></div>
+      <div class="gx-l" style="grid-row:2">利用者から<br>見た流れ</div>
+      <div class="gx-l" style="grid-row:3"></div>
+      <div class="gx-l" style="grid-row:4">裏側の処理</div>
+      <div class="tt-cv first" style="grid-column:2"><span class="n">1</span><span class="t">Text 1</span></div>
+      <div class="tt-cv" style="grid-column:3"><span class="n">2</span><span class="t">Text 2</span></div>
+      <div class="tt-cv" style="grid-column:4"><span class="n">3</span><span class="t">Text 3</span></div>
+      <div class="tt-cv" style="grid-column:5"><span class="n">4</span><span class="t">Text 4</span></div>
+      <div class="tt-dn" style="grid-column:2"><i></i></div>
+      <div class="tt-dn" style="grid-column:3"><i></i></div>
+      <div class="tt-dn" style="grid-column:4"><i></i></div>
+      <div class="tt-dn" style="grid-column:5"><i></i></div>
+      <div class="tt-bk" style="grid-column:2"><b>ラベル 1</b><ul><li>Text 5</li><li>Text 6</li><li>Text 7</li></ul></div>
+      <div class="tt-bk" style="grid-column:3"><b>ラベル 2</b><ul><li>Text 8</li><li>Text 9</li><li>Text 10</li></ul></div>
+      <div class="tt-bk" style="grid-column:4"><b>ラベル 3</b><ul><li>Text 11</li><li>Text 12</li><li>Text 13</li></ul></div>
+      <div class="tt-bk" style="grid-column:5"><b>ラベル 4</b><ul><li>Text 14</li><li>Text 15</li><li>Text 16</li></ul></div>
+    </div>
+    <div class="src">出典：Source 1</div>
+  </div>
+  <div class="foot"><b>資料名</b><span>29</span></div>
+</section>
+
+<!-- ═══ パーツ30: 一問一答（質問と回答を区切り線で分けて並べる） ═══
+     使いどころ: 打ち合わせ・事前の質問票で受けた質問に、1件ずつ答えるページ。
+     質問は相手の言葉のまま「」で書き、言い換え・要約をしない（どの質問への答えかを相手が見つけられるように）。
+     回答は結論の1文を先に置き、根拠・条件をブレットで続ける。まだ決まっていないことは言い切らない（§4.71）。
+     Q の番号は、後のページや口頭で番号を指すときだけ付ける（§7.13）。付けるなら文字と別の要素にし、1文字ぶん空ける（§4.95）。
+     質問と回答の間は細い点線、行の罫線は点線の位置で切る（§6 縦の区切り線）。行の高さは揃える。5件を超えたら2枚に分ける。 -->
+<section class="s">
+  <div class="bar"><div class="logo">資料名</div><div class="date">パーツ30｜一問一答</div></div>
+  <h1>一問一答（質問は相手の言葉のまま・回答は結論から）</h1>
+  <div class="c">
+    <div class="qa">
+      <div class="qa-h"><div class="axh"><span>いただいた質問</span></div><i></i><div class="axh"><span>回答</span></div></div>
+      <div class="qa-b">
+        <div class="qa-r"><div class="qa-q"><div><i class="qa-n">Q1</i><span>「Text 1」</span></div></div><i class="qa-v"></i><div class="qa-a"><ul><li>Text 6</li><li>Text 7</li></ul></div></div>
+        <div class="qa-r"><div class="qa-q"><div><i class="qa-n">Q2</i><span>「Text 2」</span></div></div><i class="qa-v"></i><div class="qa-a"><ul><li>Text 8</li><li>Text 9</li></ul></div></div>
+        <div class="qa-r"><div class="qa-q"><div><i class="qa-n">Q3</i><span>「Text 3」</span></div></div><i class="qa-v"></i><div class="qa-a"><ul><li>Text 10</li><li>Text 11</li></ul></div></div>
+        <div class="qa-r"><div class="qa-q"><div><i class="qa-n">Q4</i><span>「Text 4」</span></div></div><i class="qa-v"></i><div class="qa-a"><ul><li>Text 12</li><li>Text 13</li></ul></div></div>
+        <div class="qa-r"><div class="qa-q"><div><i class="qa-n">Q5</i><span>「Text 5」</span></div></div><i class="qa-v"></i><div class="qa-a"><ul><li>Text 14</li><li>Text 15</li></ul></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><b>資料名</b><span>30</span></div>
 </section>
 
 <script>

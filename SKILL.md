@@ -1,6 +1,6 @@
 ---
 name: consulting-pptx-skill
-description: スライド設計規約 slide-rules.md を核に、経営会議品質のスライドを作るスキル。作成前に規約を読み、HTMLパーツ集（基本27＋追加35の62型）から該当パーツをコピーして組み、規約の範囲で型に囚われず調整し、check_deck.py の機械チェック FAIL 0 で仕上げる。型カタログはレイアウトの発想帳であり、合わせる対象ではない。既存の PowerPoint 資料を渡され、そこへ差し込むページを PPTX で求められたときだけ、その資料のマスターの上に直接組む（slide-rules §8.7）。トリガー例:「コンサル品質のスライドを作って」「規約に沿ったデッキで」「型カタログから選んで」「この pptx に足すページを同じ書式で」。
+description: スライド設計規約 slide-rules.md を核に、経営会議品質のスライドを作るスキル。作成前に規約を読み、HTMLパーツ集（基本30＋追加35の65型）から該当パーツをコピーして組み、規約の範囲で型に囚われず調整し、check_deck.py の機械チェック FAIL 0 で仕上げる。型カタログはレイアウトの発想帳であり、合わせる対象ではない。既存の PowerPoint 資料を渡され、そこへ差し込むページを PPTX で求められたときだけ、その資料のマスターの上に直接組む（slide-rules §8.7）。トリガー例:「コンサル品質のスライドを作って」「規約に沿ったデッキで」「型カタログから選んで」「この pptx に足すページを同じ書式で」。
 ---
 
 # コンサル型スライド作成スキル
@@ -14,18 +14,18 @@ description: スライド設計規約 slide-rules.md を核に、経営会議品
 | ファイル | 中身 | 読む・使うタイミング |
 | --- | --- | --- |
 | `references/slide-rules.md` | 規約の正典 | **必読。作成前に全文** |
-| `references/archetype-catalog.md` | 62型の一覧（型ID・型名・使いどころ・どのパーツ集の何番か） | ストーリーラインの各行に見せ方を書くとき、見せ方に迷う行があれば引く（必読ではない。手順2） |
+| `references/archetype-catalog.md` | 65型の一覧（型ID・型名・使いどころ・どのパーツ集の何番か） | ストーリーラインの各行に見せ方を書くとき、見せ方に迷う行があれば引く（必読ではない。手順2） |
 | `references/content-review-prompt.md` | フレッシュアイ・レビューの指示文 | 機械チェック通過後、納品前 |
 | `references/ai-smell-lexicon.md` | AI臭ワード・言い回しのリスト | 文章の仕上げ時 |
-| `templates/freeform_parts_16x9.html` | 基本パーツ集 27（表紙・全体マップ・矢羽・前提→帰結・軸のある表・主張パネル・評価表・分布図など）。まずここから | 手順3 |
+| `templates/freeform_parts_16x9.html` | 基本パーツ集 30（表紙・全体マップ・矢羽・前提→帰結・軸のある表・主張パネル・評価表・分布図・スイムレーン・表と裏の2段・一問一答など）。まずここから | 手順3 |
 | `templates/freeform_parts_more_16x9.html` | 追加パーツ集 35（エグゼクティブサマリー・積み上げ棒・ブリッジ・散布図・比較表・マトリクス・ロードマップ・ガントなど）。基本で足りないとき | 手順3 |
-| `assets/SlideCatalog_16x9.pdf` | 両パーツ集を印刷した62ページ（P.1〜27 基本、P.28〜62 追加） | 型を目で探すとき |
+| `assets/SlideCatalog_16x9.pdf` | 両パーツ集を印刷した65ページ（P.1〜30 基本、P.31〜65 追加） | 型を目で探すとき |
 | `scripts/new_deck.py` | パーツ番号を並べて1本のHTMLを生成 | 手順3 |
 | `scripts/check_deck.py` | 規約の機械チェック（HTML は標準ライブラリのみ） | 手順6 |
 | `scripts/check_layout.mjs` | 重なり・はみ出し・空きの多いページの実レンダリング検査（`npm run setup` で playwright を入れる） | 手順7 |
 | `tests/test_checks.py` | 機械チェックの自己テスト（直していない版で発火し、直した版で通ることを確認） | 機械チェックを足した・直したとき |
 | `scripts/html_to_pptx.py` | 仕上げた HTML を編集できる PPTX に変換（`html_dump.mjs`・`lib_cdp.mjs` を使う） | ユーザーが PPTX を明示したときだけ |
-| `assets/SuperTemplate_62type.pptx` | 62型のPPTX見本帳（全スライド編集可能） | PPTX を手で組むとき |
+| `assets/SuperTemplate_62type.pptx` | 62型のPPTX見本帳（全スライド編集可能。基本パーツ集の b28〜b30 は未収録） | PPTX を手で組むとき |
 | `scripts/measure_deck.py` | 既存の PowerPoint 資料（.pptx／テンプレートの .potx）の書式を測って `skin.json` に書き出す | 既存の資料へ差し込むページを作るとき（最初に）|
 | `scripts/deck_pptx.py` | その資料のマスターの上に、同じ書式のページを組む部品（作例は `examples/house_deck_example.py`） | 同上 |
 | `local/`（git 管理外） | 利用者の組織の規約 `slide-rules.local.md`・禁止語 `forbid.txt`・自前テンプレ（`local/README.md`） | あれば本体の規約の後に必ず読む。無ければ飛ばす |
@@ -49,7 +49,7 @@ description: スライド設計規約 slide-rules.md を核に、経営会議品
    - 枚数に上限があるときの削る順: 章扉・目次 → 全体マップと重複する本文 → 補足・付録。表紙・全体マップ・結論ページ・裏表紙は残す。リスクの列挙は対応策と同じ1枚にする（§4.29）。
 3. **たたき台を生成する**:
    ```bash
-   python3 scripts/new_deck.py --list                                   # 番号と型名（b01〜b27 基本／m01〜m35 追加）
+   python3 scripts/new_deck.py --list                                   # 番号と型名（b01〜b30 基本／m01〜m35 追加）
    python3 scripts/new_deck.py --parts b01,b02,m05,b06,b09,b10 --title "資料名" -o mydeck.html
    ```
    両パーツ集のCSS結合・見出し様式の統一・ページ番号の振り直しはスクリプトが行う。手でコピーして組まない。生成後、プレースホルダー（`Text N` / `ラベル N` / `YYYY`）を実物に差し替える。 出典行（`.src`・`.source`）は既定で入っているので、出典を置く資料（§4.47）でなければ消す（営業提案・定例は原則置かない）。
@@ -80,7 +80,7 @@ description: スライド設計規約 slide-rules.md を核に、経営会議品
 - 書体は和文ゴシック＝Yu Gothic、明朝＝Yu Mincho に置き換える。字幅の差で行末が1字ずれることがあるので目視は省かない
 - 再現しない: 回転・変形（CSS の transform）、`::before`/`::after` で描いた装飾（背景付きの丸数字など。行頭記号の文字は箇条書き書式として再現する）。これらはパーツ側で使わないか、変換後に PowerPoint で直す
 
-PPTX を一から手で組むときの見本として `assets/SuperTemplate_62type.pptx`（62型・全スライド編集可能）も置いてある。
+PPTX を一から手で組むときの見本として `assets/SuperTemplate_62type.pptx`（62型・全スライド編集可能。b28〜b30 は未収録）も置いてある。
 
 ### 既存の資料へ差し込むページ
 
