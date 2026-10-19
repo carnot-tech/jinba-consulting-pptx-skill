@@ -777,6 +777,16 @@ def check_page_numbers(nums):
             return
 
 
+def header_label(fragment):
+    """本文ページの右上ラベルの有無。基本パーツは `.bar`/`.hdr` の中の `.date`、
+    追加パーツは `.kicker` がラベル。どちらも同じ「ラベル」として扱い、文字が入っているかで有無を見る。
+    タイトルより上だけを見る（グラフの棒 `.bar` などを拾わない）"""
+    head = re.split(r'<h1\b|class="[^"]*\b(?:ttl|title|msg)\b', fragment, maxsplit=1)[0]
+    m = re.search(r'<(\w+)[^>]*class="(?:[^"]*\s)?(?:kicker|date)(?:\s[^"]*)?"[^>]*>(.*?)</\1>', head, re.S)
+    text = re.sub(r"<[^>]+>", "", m.group(2)).strip() if m else ""
+    return "あり" if text else "なし"
+
+
 def check_header_consistency(heads):
     """§4.19・§4.62: 本文ページの右上ラベル（タグチップ）の有無と作りをデッキで揃える"""
     body = [(i, h) for i, h in heads if h is not None]
@@ -888,8 +898,7 @@ def check_html(path):
             shapes.append("")
             continue
         if not edge:
-            km = re.search(r'class="(kicker|bar)\b', s)
-            heads.append((i, km.group(1) if km else "なし"))
+            heads.append((i, header_label(s)))
         # <br> で意味の切れ目に明示改行済み（§2.13）なら、各行が1行目安に収まる限り2行想定の WARN は出さない
         lines = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", x)).strip() for x in re.split(r"<br\s*/?>", raw_t)]
         explicit_break = len(lines) > 1 and all(_fwlen(x) <= TITLE_MAX for x in lines)

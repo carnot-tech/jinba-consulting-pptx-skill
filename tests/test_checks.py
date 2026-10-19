@@ -549,6 +549,21 @@ class BotFeedback20261019(unittest.TestCase):
         html = html.replace("<span>3</span>", "<span>3</span><i>①事前チェック</i>", 1)
         self.assertTrue(any("番号つきの項目名" in l for l in warns(html)))
 
+    def test_mixed_parts_header_label_passes(self):
+        # 基本パーツ（.bar/.date）と追加パーツ（.kicker → new_deck で .hdr/.date）の混在は正規のデッキ
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "mixed.html"
+            subprocess.run([sys.executable, str(ROOT / "scripts" / "new_deck.py"),
+                            "--parts", "b01,b02,b05,m05,b06,m10,b09,m20,b10", "-o", str(out)],
+                           capture_output=True, check=True)
+            r = subprocess.run([sys.executable, str(CHECK), str(out)], capture_output=True, text=True, encoding="utf8")
+        self.assertFalse(any("右上のラベル" in l for l in r.stdout.splitlines()), r.stdout[-600:])
+        self.assertFalse(any("右上のラベル" in l for l in warns(GOOD)))
+
+    def test_missing_header_label_warns(self):
+        html = inject('<div class="date">打ち手</div>', '<div class="date"></div>')
+        self.assertTrue(any("右上のラベル" in l for l in warns(html)), warns(html))
+
 
 @unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
 class LayoutBotFeedback20261019(LayoutFeedback20261012):
