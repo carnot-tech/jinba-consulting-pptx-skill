@@ -26,6 +26,7 @@
 //  24. 行のリスト（罫線で区切った行の並び）の間延び・左右2列の行の位置のずれ（WARN。§4.12・§4.51）
 //  25. 並べた見出し・大きな数字のうち、一部だけが2行に折れている（WARN。§4.51・§2.13）
 //  26. 表の列の区切り線・行の軸の縦線が、見出しの行まで伸びて見出しの下罫より上に出ている（WARN。§6）
+//  28. PDF のページ数がスライドの枚数と合わない（FAIL）。タイトルが22ptから±10%超ずれる（FAIL。§2.1）
 //  27. 並べた項目（箇条書き・同じ種類の縦の並び）の間が、余白・gap の決まりより文字の1.5倍超（WARN）・3倍超（FAIL）余分に空いている間延び（§4.12）
 //   4 の補足: 版面の30%超が空いているときは WARN（40%超は FAIL）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
@@ -779,7 +780,7 @@ const { issues, warns } = await page.evaluate(() => {
       const ttl = s.querySelector("h1, .title, .ttl");
       const body = [...s.querySelectorAll("li, td, p")].filter((el) => (el.textContent || "").trim().length > 8 && !el.closest(".src, .foot, .footer"));
       const bs = body.map(effSize).filter((v) => v > 0).sort((a, b) => a - b);
-      sizes.push({ n, title: ttl ? effSize(ttl) : 0, body: bs.length ? bs[Math.floor(bs.length / 2)] : 0 });
+      sizes.push({ n, title: ttl ? effSize(ttl) : 0, sw: sr.width, body: bs.length ? bs[Math.floor(bs.length / 2)] : 0 });
     }
     // 17. 文字が、それを囲む箱（塗り・四辺の枠・表のセル）の外にはみ出している
     if (!std) {
@@ -821,6 +822,10 @@ const { issues, warns } = await page.evaluate(() => {
   for (const x of sizes) {
     if (mt && x.title && Math.abs(x.title / mt - 1) > 0.04)
       out.push(`p${x.n}: タイトルの実際の大きさが他のページの ${Math.round((x.title / mt) * 100)}%（パーツ集の混在で縮小がかかっていない可能性。§4・追加パーツ集は .slide の zoom ごと持ち込む）`);
+    // §2.1: タイトルは 22pt（版面の幅 338.67mm に対して 7.76mm）。空きを埋めるために大きくしない・1行に収めるために小さくしない
+    const tr = x.title && x.sw ? x.title / x.sw / (22 * 25.4 / 72 / 338.67) : 0;
+    if (tr && Math.abs(tr - 1) > 0.1)
+      out.push(`p${x.n}: タイトルの大きさが既定の22ptの ${Math.round(tr * 100)}%（§2.1: タイトルは22pt。空きを埋めるために大きくしない・1行に収めるために小さくしない。長ければ2行にする）`);
     if (mb && x.body && Math.abs(x.body / mb - 1) > 0.15)
       warnOut.push(`p${x.n}: 本文の実際の大きさが他のページの ${Math.round((x.body / mb) * 100)}%（揃える。強調なら、強調する理由を qa.md に書く）`);
   }
@@ -831,6 +836,14 @@ const { issues, warns } = await page.evaluate(() => {
   return { issues: [...new Set(out)], warns: [...new Set(warnOut)] };
 });
 
+// 28. PDF にしたときのページ数がスライドの枚数と合うか（1枚が用紙より高いと、PDF で2ページに割れる）
+try {
+  const nSlides = await page.evaluate(() => document.querySelectorAll("section.s, section.slide").length);
+  const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true });
+  const nPages = (pdf.toString("latin1").match(/\/Type\s*\/Page(?!s)/g) || []).length;
+  if (nSlides && nPages && nPages !== nSlides)
+    issues.unshift(`PDF が ${nPages} ページになる（スライドは ${nSlides} 枚）。用紙より高いスライドがあり、PDF で途中から次のページに割れている（はみ出した要素を版面に収める）`);
+} catch (e) { console.error("PDF ページ数の照合を飛ばした: " + e.message); }
 await browser.close();
 for (const m of warns.slice(0, 20)) console.log("WARN  " + m);
 if (issues.length) {

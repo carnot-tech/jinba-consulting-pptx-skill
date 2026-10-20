@@ -835,6 +835,21 @@ class FrameworkLabelsAndCommas(unittest.TestCase):
         self.assertFalse(any("思考の枠組みの名前" in l or "半角カンマ" in l for l in run(GOOD)[1] + warns(GOOD)))
 
 
+class DashAndPlaceholders(unittest.TestCase):
+    """check_deck：「—」で語句をつなぐ（FAIL。§7.1）、XXXX などの伏せ字（FAIL）"""
+
+    def test_dash_link_fails(self):
+        html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "業務自動化 — 承認待ちを当日に縮める")
+        self.assertTrue(any("「—」で語句をつないでいる" in l for l in run(html)[1]))
+
+    def test_placeholder_xxxx_fails(self):
+        html = GOOD.replace("差し戻しの6割は添付漏れ", "差し戻しの6割は添付漏れ（内線 XXXX）", 1)
+        self.assertTrue(any("プレースホルダー" in l for l in run(html)[1]))
+
+    def test_good_deck_passes(self):
+        self.assertFalse(any("「—」" in l or "プレースホルダー" in l for l in run(GOOD)[1]))
+
+
 class CoverPlaceholder(unittest.TestCase):
     """check_deck：表紙・裏表紙に見本の文言（当社・会社名・連絡先・「表紙」のラベル）が残っていたら FAIL"""
 
@@ -972,6 +987,31 @@ class SpreadItems(LayoutFeedback20261012):
 
     def test_compact_card_passes(self):
         self.assertFalse(any("真ん中が" in l for l in self.layout(self.cards(False))))
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class TitleSizeAndPdfPages(LayoutFeedback20261012):
+    """check_layout：タイトルが22ptから±10%超ずれる（FAIL。§2.1）、PDF のページ数がスライドの枚数と合わない（FAIL）"""
+
+    def full(self, html):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "deck.html"
+            p.write_text(html, encoding="utf8")
+            r = subprocess.run(["node", str(ROOT / "scripts" / "check_layout.mjs"), str(p)], capture_output=True, text=True, cwd=ROOT, encoding="utf8")
+        return r.stdout
+
+    def test_big_title_fails(self):
+        html = GOOD.replace("</style>", ".s h1{font-size:30pt}</style>", 1)
+        self.assertIn("タイトルの大きさが既定の22pt", self.full(html))
+
+    def test_overflowing_page_splits_pdf(self):
+        html = GOOD.replace("</style>", ".s.cover{height:auto;min-height:200mm;overflow:visible}</style>", 1)
+        self.assertIn("PDF が", self.full(html))
+
+    def test_good_deck_passes(self):
+        out = self.full(GOOD)
+        self.assertNotIn("タイトルの大きさが既定の22pt", out)
+        self.assertNotIn("PDF が", out)
 
 
 @unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")

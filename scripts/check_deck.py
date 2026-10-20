@@ -243,7 +243,7 @@ def check_number_consistency(pages):
 # タイトルだけでなく本文・表・カードに「Text N」「ラベル N」「YYYY」「パーツNN｜」が残っていたら FAIL。
 # 型名をそのままタイトルにしたページ（例:「軸のある表」）も FAIL。
 BODY_PLACEHOLDER = re.compile(
-    r"Text\s*\d+|ラベル\s*\d+|タイトル\s*\d+|Source\s*\d+|YYYY|パーツ\s*\d+\s*[｜|]|ダミー|^会社名$|^連絡先$")
+    r"Text\s*\d+|ラベル\s*\d+|タイトル\s*\d+|Source\s*\d+|YYYY|XXX|ＸＸＸ|○○|〇〇|●●|△△|\bTBD\b|Lorem|パーツ\s*\d+\s*[｜|]|ダミー|^会社名$|^連絡先$")
 
 
 def _part_type_names():
@@ -728,6 +728,16 @@ JA = r"[\u3040-\u30ff\u4e00-\u9fff]"
 HALF_COMMA = re.compile(JA + r",\s?" + JA)
 
 
+DASH_LINK = re.compile(r"\S\s?[—―─━]{1,2}\s?\S")  # 全角ダッシュ・水平線・罫線の文字でのつなぎ
+
+
+def check_dash_link(idx, text):
+    """§7.1: 「 — 」でつながない（AI 臭の典型）。非該当セルの「—」単独は可（前後が要素の切れ目で空く）"""
+    m = DASH_LINK.search(text)
+    if m:
+        fail(f"p{idx}: 「—」で語句をつないでいる「{text[max(0, m.start() - 10):m.end() + 10].strip()}」（句点・「：」・括弧で区切る。§7.1）")
+
+
 def check_framework_and_commas(idx, leaves, vis):
     """§7.32: 英語の思考の枠組みの名前（Situation／Complication／Resolution 等）を見出し・列名に書かない。
     日本語の文の中の半角カンマは読点「、」にする"""
@@ -978,6 +988,7 @@ def check_html(path):
         leaves = _leaf_texts(s)
         check_body_placeholders(i, leaves, t)
         check_framework_and_commas(i, leaves, vis)
+        check_dash_link(i, vis)
         check_exec_summary(i, t, s)
         if "cover" not in cls:
             check_multi_sentence(i, leaves)
