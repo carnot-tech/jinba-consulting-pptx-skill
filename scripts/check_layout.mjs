@@ -25,7 +25,7 @@
 //  23. 同じ作りの箱の左端が、揃うはずの位置から少しずれている（ツリーの段の始まりなど。WARN。§4.51）
 //  24. 行のリスト（罫線で区切った行の並び）の間延び・左右2列の行の位置のずれ（WARN。§4.12・§4.51）
 //  25. 並べた見出し・大きな数字のうち、一部だけが2行に折れている（WARN。§4.51・§2.13）
-//  26. 表の列の区切り線（縦の線）が、見出しの行まで伸びて見出しの下罫より上に出ている（WARN。§6）
+//  26. 表の列の区切り線・行の軸の縦線が、見出しの行まで伸びて見出しの下罫より上に出ている（WARN。§6）
 //   4 の補足: 版面の30%超が空いているときは WARN（40%超は FAIL）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
 // 使い方: node scripts/check_layout.mjs deck.html   （playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
@@ -109,6 +109,7 @@ const { issues, warns } = await page.evaluate(() => {
         if (el.children.length > 0 && el.tagName !== "IMG" && el.tagName !== "svg") continue;
         const r = el.getBoundingClientRect();
         if (r.height === 0 || r.width === 0) continue;
+        if (r.bottom <= top + 1 || r.top >= bottom - 1) continue; // タイトルより上（右上のラベル等）・フッターより下は版面の外
         contentBottom = Math.max(contentBottom, r.bottom);
         contentTop = Math.min(contentTop, r.top);
       }
@@ -628,7 +629,7 @@ const { issues, warns } = await page.evaluate(() => {
           }
         }
       }
-      // 26. 列の区切り線が見出しの行まで伸びている（行の軸の縦線＝左端の列の線は対象外）
+      // 26. 列の区切り線・行の軸の縦線が見出しの行まで伸びている（左端の列の右の線も含む）
       for (const t of s.querySelectorAll("table")) {
         const head = t.rows[0];
         if (!head || ![...head.cells].every((c) => c.tagName === "TH")) continue;
@@ -638,10 +639,10 @@ const { issues, warns } = await page.evaluate(() => {
         const bad = cells.find((c, k) => {
           const st = getComputedStyle(c);
           const left = k >= 2 && parseFloat(st.borderLeftWidth) >= 1 && st.borderLeftStyle !== "none";
-          const right = k >= 1 && k < cells.length - 1 && parseFloat(st.borderRightWidth) >= 1 && st.borderRightStyle !== "none";
+          const right = k < cells.length - 1 && parseFloat(st.borderRightWidth) >= 1 && st.borderRightStyle !== "none";
           return left || right;
         });
-        if (bad) { warnOut.push(`p${n}: 表の列の区切り線が見出しの行まで伸び、見出しの下罫より上に出ている「${(bad.textContent || "").trim().slice(0, 12)}」（区切り線は本文の行にだけ引く — §6）`); break; }
+        if (bad) { warnOut.push(`p${n}: 表の縦の線が見出しの行まで伸び、見出しの下罫より上に出ている「${(bad.textContent || "").trim().slice(0, 12)}」（行の軸の線・区切り線は本文の行にだけ引く — §6）`); break; }
       }
       // 11. 片側だけの空き：タイトルの横幅を基準に、本文の文字・図形が占める横の範囲の外側を測る
       const ttl2 = s.querySelector("h1, .title, .ttl");

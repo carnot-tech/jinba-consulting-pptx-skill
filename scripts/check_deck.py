@@ -928,9 +928,9 @@ def check_html(path):
         cls = (slide_classes[i - 1] if i - 1 < len(slide_classes) else "").split()
         nums.append((i, page_number(s)))
         if not TEMPLATE_MODE and ("cover" in cls or "back" in cls or i == len(slides)):
-            left = [x for x in _leaf_texts(s) if re.fullmatch(r"当社|会社名|連絡先|お問い合わせ\s*当社|資料名|担当者名", x)]
+            left = [x for x in _leaf_texts(s) if re.fullmatch(r"当社|会社名|連絡先|お問い合わせ\s*当社|資料名|担当者名|表紙|裏表紙|章扉", x)]
             if left:
-                fail(f"p{i}: 表紙・裏表紙に見本の文言が残っている「{left[0]}」（作成者・連絡先を実物にする）")
+                fail(f"p{i}: 表紙・裏表紙に見本の文言が残っている「{left[0]}」（作成者・連絡先は実物にし、「表紙」のような型の名前のラベルは消す）")
         edge = bool({"cover", "chap", "back"} & set(cls))
         if "std" in cls:
             # 正本から差し込んだ定型ページ（§4.99）は文章・版面の検査を飛ばす

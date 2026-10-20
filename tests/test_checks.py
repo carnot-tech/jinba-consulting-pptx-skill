@@ -802,12 +802,16 @@ class MetaTitle(unittest.TestCase):
 
 
 class CoverPlaceholder(unittest.TestCase):
-    """check_deck：表紙・裏表紙に見本の文言（当社・会社名・連絡先）が残っていたら FAIL"""
+    """check_deck：表紙・裏表紙に見本の文言（当社・会社名・連絡先・「表紙」のラベル）が残っていたら FAIL"""
 
     def test_back_cover_placeholder_fails(self):
         last = GOOD.rfind('<section class="s cover">')
         html = GOOD[:last] + GOOD[last:].replace('<section class="s cover">', '<section class="s cover"><div>当社</div>', 1)
         self.assertTrue(any("見本の文言" in l for l in run(html)[1]))
+
+    def test_cover_type_label_fails(self):
+        html = GOOD.replace('<section class="s cover">', '<section class="s cover"><div>表紙</div>', 1)
+        self.assertTrue(any("見本の文言が残っている「表紙」" in l for l in run(html)[1]))
 
     def test_good_deck_cover_passes(self):
         self.assertFalse(any("見本の文言" in l for l in run(GOOD)[1]))
@@ -900,7 +904,7 @@ class PartVariant(unittest.TestCase):
 
 @unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
 class DividerAboveHeader(LayoutFeedback20261012):
-    """check_layout：表の列の区切り線が見出しの行まで伸びている（WARN。§6）"""
+    """check_layout：表の列の区切り線・行の軸の縦線が見出しの行まで伸びている（WARN。§6）"""
 
     def table(self, head_divider):
         th = "border-bottom:2px solid #333;" + ("border-left:1px dotted #999;" if head_divider else "")
@@ -909,7 +913,19 @@ class DividerAboveHeader(LayoutFeedback20261012):
                 f'<th style="{th}">担当</th></tr>{rows}</table><div style="height:250px;border:1px solid #333">図</div>')
 
     def test_divider_in_header_warns(self):
-        self.assertTrue(any("区切り線が見出しの行まで" in l for l in self.layout(self.table(True))))
+        self.assertTrue(any("縦の線が見出しの行まで" in l for l in self.layout(self.table(True))))
 
     def test_divider_only_in_body_passes(self):
-        self.assertFalse(any("区切り線が見出しの行まで" in l for l in self.layout(self.table(False))))
+        self.assertFalse(any("縦の線が見出しの行まで" in l for l in self.layout(self.table(False))))
+
+    def axis_table(self, head_line):
+        th0 = "border-bottom:2px solid #333;" + ("border-right:2px solid #333;" if head_line else "")
+        rows = "".join(f'<tr><td style="border-right:2px solid #333;font-weight:700">部門{i}</td><td>月に約{i}0件</td><td>担当{i}名</td></tr>' for i in range(1, 4))
+        return (f'<table style="border-collapse:collapse"><tr><th style="{th0}">部門</th><th style="border-bottom:2px solid #333">件数</th>'
+                f'<th style="border-bottom:2px solid #333">担当</th></tr>{rows}</table><div style="height:250px;border:1px solid #333">図</div>')
+
+    def test_axis_line_in_header_warns(self):
+        self.assertTrue(any("縦の線が見出しの行まで" in l for l in self.layout(self.axis_table(True))))
+
+    def test_axis_line_only_in_body_passes(self):
+        self.assertFalse(any("縦の線が見出しの行まで" in l for l in self.layout(self.axis_table(False))))
