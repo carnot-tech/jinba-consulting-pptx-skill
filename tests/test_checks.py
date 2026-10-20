@@ -829,3 +829,43 @@ class UnevenWrap(LayoutFeedback20261012):
     def test_all_one_line_passes(self):
         out = self.layout(self.cols(["土台づくり", "試行", "本番化", "拡大判断"]))
         self.assertFalse(any("折れている" in l for l in out), out)
+
+
+CHROME_APP = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+
+class HeadlessShell(unittest.TestCase):
+    """PDF 化は Chromium headless shell で行い、Chrome 本体と同じ出力になること"""
+
+    def test_chrome_path_overrides(self):
+        import os
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "find_browser.py")], capture_output=True, text=True,
+                           env={**os.environ, "CHROME_PATH": "/opt/custom/chrome"})
+        self.assertEqual(r.stdout.strip(), "/opt/custom/chrome")
+
+    @unittest.skipUnless(Path(CHROME_APP).exists(), "Chrome 本体が要る（比較の基準）")
+    def test_headless_shell_pdf_matches_chrome(self):
+        import shutil
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from find_browser import headless_shell
+        hs = headless_shell()
+        if not hs or not shutil.which("pdftoppm"):
+            self.skipTest("headless shell（npm run setup）と pdftoppm が要る")
+        from PIL import Image, ImageChops
+        with tempfile.TemporaryDirectory() as d:
+            deck = Path(d) / "deck.html"
+            deck.write_text(GOOD, encoding="utf8")
+            outs = {}
+            for name, exe in (("hs", hs), ("chrome", CHROME_APP)):
+                pdf = Path(d) / f"{name}.pdf"
+                subprocess.run([exe, "--headless", "--disable-gpu", "--no-pdf-header-footer", f"--print-to-pdf={pdf}", str(deck)],
+                               capture_output=True, check=True, timeout=120)
+                subprocess.run(["pdftoppm", "-r", "40", "-png", str(pdf), str(Path(d) / name)], check=True)
+                outs[name] = sorted(Path(d).glob(f"{name}-*.png"))
+            self.assertEqual(len(outs["hs"]), len(outs["chrome"]))
+            for a, b in zip(outs["hs"], outs["chrome"]):
+                ia, ib = Image.open(a).convert("L"), Image.open(b).convert("L")
+                self.assertEqual(ia.size, ib.size)
+                diff = ImageChops.difference(ia, ib)
+                changed = sum(1 for v in diff.getdata() if v > 40) / (ia.size[0] * ia.size[1])
+                self.assertLess(changed, 0.005, f"{a.name} が Chrome 本体と {changed:.2%} 違う")

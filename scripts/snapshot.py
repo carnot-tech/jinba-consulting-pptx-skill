@@ -6,7 +6,9 @@
   python3 scripts/snapshot.py mydeck.html --per 2    # 1枚に2ページ（細部を見たいとき）
 
 全ページを見る精度は保ったまま、画像を読む回数を減らすための道具。崩れが疑わしいページは
---page 5 で1ページだけ大きく出して確かめる。依存: Google Chrome（または Chromium）、pdftoppm（poppler）、Pillow。
+--page 5 で1ページだけ大きく出して確かめる。
+依存: Chromium headless shell（`npm run setup` で入る。CHROME_PATH で Chrome 本体にも切り替えられる。探し方は find_browser.py）、
+pdftoppm（poppler）、Pillow。
 """
 import argparse
 import shutil
@@ -15,17 +17,15 @@ import sys
 import tempfile
 from pathlib import Path
 
-CHROME_CANDIDATES = [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
-]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from find_browser import find_browser  # noqa: E402
 
 
 def chrome():
-    for c in CHROME_CANDIDATES:
-        if Path(c).exists() or shutil.which(c):
-            return c
-    sys.exit("Chrome が見つからない")
+    b = find_browser()
+    if not b:
+        sys.exit("ブラウザが見つからない。`npm run setup`（headless shell を入れる）か、CHROME_PATH で指定する")
+    return b
 
 
 def main():

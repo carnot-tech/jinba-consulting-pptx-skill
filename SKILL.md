@@ -7,7 +7,7 @@ description: スライド設計規約 slide-rules.md を核に、経営会議品
 
 主軸は規約の正典 `references/slide-rules.md`。ただし最初に全文を読み込まない。**工程ごとに `scripts/rules.py --phase <工程>` で、その工程の要点（数千字。出力は切らずに全部読む）を読み、詳しい根拠が要る項だけ `--sec` で引く。** 部品は規約を満たすことを確かめた20種類（`new_deck.py --list`）から選び、検査で出た指摘は、指摘に書かれた節だけを引いて直す。
 
-成果物は HTML（16:9・1 section = 1スライド）と、Chrome で印刷した PDF。
+成果物は HTML（16:9・1 section = 1スライド）と、Chromium headless shell で印刷した PDF（`snapshot.py`。Chrome 本体と同じ出力）。
 
 ## 読むもの・使うもの
 
@@ -75,7 +75,7 @@ description: スライド設計規約 slide-rules.md を核に、経営会議品
 
 **指摘は規約1行と機械チェックの両方にする。** レビューで受けた指摘は、この規約に1行足すだけでは次のセッションで再発する。測れる指摘（数・位置・語・空き）は check_deck／check_layout に判定を足し、`tests/test_checks.py` に「直していない版で FAIL が出る」「直した版で出ない」の2件を足して `python3 -m unittest discover -s tests` を通す。直していない版で発火しないチェックは、測れていないのと同じ。FAIL が0件のときほど、測れていない経路を疑う（例: 本文のプレースホルダーは以前タイトルしか検査しておらず、`Text 1` だらけのデッキが FAIL 0 で通っていた）。
 
-その後の目視QA（PPTX: スライド分割＋`qlmanage`、HTML: Chrome でPDF化→`pdftoppm`）で、孤立折返し・はみ出し・重なり・左右下端の不揃い・凡例の有無・**余白過多や要素の沈み（版面バランス）**を確認する（文字だけ確認して空白過多を見逃さない）。**レビュー指摘を受けたら、まず正本の最新版で再現するかを確認してから直す**（レビュアーが古い版を見ていることがある）。
+その後の目視QA（PPTX: スライド分割＋`qlmanage`、HTML: `snapshot.py` でPDF化と画像化）で、孤立折返し・はみ出し・重なり・左右下端の不揃い・凡例の有無・**余白過多や要素の沈み（版面バランス）**を確認する（文字だけ確認して空白過多を見逃さない）。**レビュー指摘を受けたら、まず正本の最新版で再現するかを確認してから直す**（レビュアーが古い版を見ていることがある）。
 
 
 **フレッシュアイ・レビュー（標準・品質優先では必須の最終工程。速度優先では省く）**。微妙な日本語の言い回しや論理展開は、コンテキストを共有していないエージェントに最後に確認させ、指摘点をリストアップし、どれを修正すべきか決めてから直す:
@@ -120,7 +120,7 @@ description: スライド設計規約 slide-rules.md を核に、経営会議品
 **資料は HTML で仕上げる。PPTX にするのは、ユーザーが「PPTX で」「パワポにして」と明示したときだけ。** 修正・レビューの往復はすべて HTML 上で回し、変換は最後に1回だけにする。HTML のほうが直すのも機械チェックも速く、PPTX で直すと HTML と中身がずれる。PPTX を渡した後に修正が来たら、HTML を直して変換し直す。明示が無ければ PDF で渡す。
 
 1. HTML で手順6〜9（機械チェック FAIL 0・フレッシュアイ・レビュー・PDF 目視）まで済ませる
-2. 変換: `python3 scripts/html_to_pptx.py mydeck.html` → 同じフォルダに mydeck.pptx（Node 22+・Chrome・`pip3 install python-pptx` が必要）
+2. 変換: `python3 scripts/html_to_pptx.py mydeck.html` → 同じフォルダに mydeck.pptx（Node 22+・headless shell（`npm run setup`）・`pip3 install python-pptx` が必要。動画を埋め込むなら ffmpeg）
 3. `python3 scripts/check_deck.py mydeck.pptx` を FAIL 0 に。PowerPoint で開いて（または PDF に書き出して）文字の折り返しと重なりを目視する
 4. 社外に送るなら、ファイルのプロパティ（作成者・会社名など）を消す。社内用のページ（`section.internal`）は `--external` を付けて書き出すと外れる
 
