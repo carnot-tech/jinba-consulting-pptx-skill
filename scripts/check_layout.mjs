@@ -14,6 +14,11 @@
 //  12. 塗りで立てたハイライトが1ページに2か所以上（WARN。§4.57）
 //  13. 表の行を縦に引き伸ばしている（行の高さが中身より1.5行ぶん以上高い表は FAIL、1行ぶん以上は WARN。§4.12）
 //  14. 凡例がグラフより下に置かれている（WARN。§5.18: 凡例はグラフの見出しの上に右揃えで置く）
+//  15. 左右2列に並べたとき、列の最初の横罫（見出しの下罫・表の上罫）の高さがずれている（WARN。§4.21）
+//  16. 塗り・枠のある大きな箱の中が半分以上空いている（WARN。§4.54: 箱で囲っても空きは空き）
+//  17. 文字が箱・セルの外にはみ出している（FAIL）
+//  18. 同じ作りの本文の文字が違う大きさ・文の途中の太字が3か所以上（WARN。§4.19・§5.5）
+//   4 の補足: 版面の30%超が空いているときは WARN（40%超は FAIL）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
 // 使い方: node scripts/check_layout.mjs deck.html   （playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
 import path from "node:path";
@@ -58,6 +63,19 @@ const { issues, warns } = await page.evaluate(() => {
   };
   const sizes = [];
   const borders = {};
+  // 要素の直下にある文字の、実際に描かれた矩形（子要素の文字は含めない）
+  const ownTextRects = (el) => {
+    const rs = [];
+    for (const nd of el.childNodes) {
+      if (nd.nodeType !== 3 || !nd.textContent.trim()) continue;
+      const rg = document.createRange();
+      rg.selectNodeContents(nd);
+      for (const r of rg.getClientRects()) if (r.width > 1 && r.height > 1) rs.push(r);
+    }
+    return rs;
+  };
+  const isFilled = (st) => { const bg = st.backgroundColor; return bg && bg !== "transparent" && !/rgba\([^)]*,\s*0\)$/.test(bg); };
+  const isBoxed = (st) => isFilled(st) || ["Top", "Right", "Bottom", "Left"].every((k) => parseFloat(st[`border${k}Width`]) > 0 && st[`border${k}Style`] !== "none");
   const slides = [...document.querySelectorAll("section.s, section.slide, .slide")];
   slides.forEach((s, i) => {
     const n = i + 1;
@@ -110,6 +128,8 @@ const { issues, warns } = await page.evaluate(() => {
       const empty = area > 0 ? 1 - span / area : 0;
       if (empty > 0.4) {
         out.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（40%超。表を割る・図を足す・2枚を1枚に統合する）`);
+      } else if (empty > 0.3) {
+        warnOut.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（30%超。「下が空きすぎ」と差し戻されやすい。文字を一段大きくする・右に意味合いを足す）`);
       }
     }
     // 13. 表の行の縦の引き伸ばし（§4.12）: 行の高さのうち、一番高いセルの中身と上下の余白を超える分を1行の高さで割る
@@ -221,12 +241,16 @@ const { issues, warns } = await page.evaluate(() => {
     }
     // 8. 文字どうしの重なり：文字を持つ葉要素の矩形が、別の葉要素と2割以上重なる
     if (!std) {
-      const leaves = els.filter((el) => el.children.length === 0 && (el.textContent || "").trim().length > 0 && !el.closest("svg"))
-        .map((el) => ({ el, r: el.getBoundingClientRect() })).filter((x) => x.r.width > 2 && x.r.height > 2);
+      // 文字の行ごとの矩形で比べる（子要素と文字が混ざった要素の文字も拾う）
+      const leaves = [];
+      for (const el of els) {
+        if (el.closest("svg")) continue;
+        for (const r of ownTextRects(el)) leaves.push({ el, r });
+      }
       let hit = 0;
       for (let a = 0; a < leaves.length && hit < 3; a++) for (let b = a + 1; b < leaves.length && hit < 3; b++) {
         const A = leaves[a], B = leaves[b];
-        if (A.el.contains(B.el) || B.el.contains(A.el)) continue;
+        if (A.el === B.el) continue;
         const ix = Math.min(A.r.right, B.r.right) - Math.max(A.r.left, B.r.left);
         const iy = Math.min(A.r.bottom, B.r.bottom) - Math.max(A.r.top, B.r.top);
         if (ix <= 0 || iy <= 0) continue;
@@ -289,6 +313,104 @@ const { issues, warns } = await page.evaluate(() => {
           }
         }
       }
+      // 15. 左右2列の最初の横罫の高さ（片側は軸タイトル付きの図、片側は見出しのない表、のような組み合わせで下罫の高さがずれる）
+      const firstRule = (c, cr) => {
+        let y = Infinity;
+        for (const el of [c, ...c.querySelectorAll("*")]) {
+          if (el !== c && el.closest("svg")) continue;
+          const st = getComputedStyle(el);
+          if (st.display === "none" || st.visibility === "hidden") continue;
+          const r = el.getBoundingClientRect();
+          // 列の幅の半分以上にわたる線だけを見る（表のセルは表全体の線の一部として数える）
+          const w = el.matches("th, td, tr") ? (el.closest("table")?.getBoundingClientRect().width ?? 0) : r.width;
+          if (w < cr.width * 0.5 || r.height === 0) continue;
+          if (parseFloat(st.borderTopWidth) >= 1 && st.borderTopStyle !== "none") y = Math.min(y, r.top);
+          if (parseFloat(st.borderBottomWidth) >= 1 && st.borderBottomStyle !== "none") y = Math.min(y, r.bottom);
+        }
+        return y - cr.top;
+      };
+      for (const g of s.querySelectorAll("*")) {
+        const gs = getComputedStyle(g);
+        const row = gs.display.includes("grid") || (gs.display.includes("flex") && !gs.flexDirection.startsWith("column"));
+        if (!row || g.closest("table, svg, .foot, .footer, footer, .src, h1, .title, .ttl")) continue;
+        const cols = [...g.children].filter((c) => {
+          const cs = getComputedStyle(c), r = c.getBoundingClientRect();
+          return cs.display !== "none" && cs.position !== "absolute" && r.width >= 120 && r.height >= 80 && (c.textContent || "").trim();
+        });
+        if (cols.length !== 2) continue;
+        const [ra, rb] = cols.map((c) => c.getBoundingClientRect());
+        if (Math.abs(ra.top - rb.top) > 4 || ra.right > rb.left + 1) continue; // 上端の揃った左右の列だけ
+        const ya = firstRule(cols[0], ra), yb = firstRule(cols[1], rb);
+        // どちらも列の上のほう（見出しの位置）に横罫があるときだけ比べる
+        if (!(ya <= 90 && yb <= 90)) continue;
+        if (Math.abs(ya - yb) > 4) {
+          warnOut.push(`p${n}: 左右の列の最初の横罫の高さが ${Math.round(Math.abs(ya - yb))}px ずれている（§4.21: 見出しの下罫・表の上罫の高さを揃える。見出しのない側にも同じ高さの見出し行を置く）`);
+          break;
+        }
+      }
+      // 16. 塗り・枠のある大きな箱の中の空き（版面の空き判定は箱を「埋まっている」と数えるので、中身の空きを別に測る）
+      {
+        const ttlB = (s.querySelector("h1, .title, .ttl") || s).getBoundingClientRect().bottom;
+        const area = (fr ? fr.top : sr.bottom) - ttlB;
+        for (const b of s.querySelectorAll("div, aside, li")) {
+          if (b === s || b.closest("table, svg, .foot, .footer, footer, .src, .bar, .legend")) continue;
+          const st = getComputedStyle(b);
+          if (!isBoxed(st)) continue;
+          const br = b.getBoundingClientRect();
+          if (br.height < area * 0.3 || br.width < sr.width * 0.15) continue;
+          const padT = parseFloat(st.paddingTop) || 0, padB = parseFloat(st.paddingBottom) || 0;
+          let top = Infinity, bot = -Infinity;
+          for (const el of [b, ...b.querySelectorAll("*")]) {
+            const rs = /^(svg|img|canvas|video)$/i.test(el.tagName) ? [el.getBoundingClientRect()]
+              : el !== b && isBoxed(getComputedStyle(el)) ? [el.getBoundingClientRect()] : ownTextRects(el);
+            for (const r of rs) { if (r.height > 0) { top = Math.min(top, r.top); bot = Math.max(bot, r.bottom); } }
+          }
+          const inner = br.height - padT - padB;
+          if (!(bot > top) || inner <= 0) continue;
+          const emptyIn = 1 - (bot - top) / inner;
+          // 高さを揃えた並列の箱（§4.51）は、短い側が空くのが当然。並びの中でいちばん中身の多い箱も空いているときだけ拾う
+          const sibs = [...(b.parentElement?.children || [])].filter((x) => x !== b && x.tagName === b.tagName && x.className === b.className);
+          const fullest = sibs.reduce((m, x) => {
+            const xr = x.getBoundingClientRect();
+            let t2 = Infinity, b2 = -Infinity;
+            for (const el of [x, ...x.querySelectorAll("*")]) for (const r of ownTextRects(el)) { t2 = Math.min(t2, r.top); b2 = Math.max(b2, r.bottom); }
+            return b2 > t2 ? Math.min(m, 1 - (b2 - t2) / Math.max(1, xr.height)) : m;
+          }, emptyIn);
+          if (emptyIn > 0.5 && fullest > 0.5) {
+            warnOut.push(`p${n}: 箱の中が ${Math.round(emptyIn * 100)}% 空いている「${(b.textContent || "").trim().slice(0, 16)}」（§4.54: 箱で囲っても空きは空き。箱を中身の高さにする・中身を足す・文字を一段大きくする）`);
+            break;
+          }
+        }
+      }
+      // 18. 本文の文字の大きさの種類と、文中の太字の数
+      {
+        const sz = new Map();
+        let bold = 0;
+        for (const el of s.querySelectorAll("p, li, td, span, b, strong")) {
+          if (el.closest("h1, h2, h3, h4, .title, .ttl, th, .foot, .footer, footer, .src, .bar, .kicker, .legend, svg")) continue;
+          const own = ownTextRects(el);
+          if (!own.length) continue;
+          const txt = [...el.childNodes].filter((x) => x.nodeType === 3).map((x) => x.textContent).join("").trim();
+          const st = getComputedStyle(el);
+          const pst0 = el.parentElement ? getComputedStyle(el.parentElement) : null;
+          // 前後どちらにも文がある太字だけを数える（行頭のラベル・行末のページ参照は数えない）
+          const textAt = (nd) => nd && nd.nodeType === 3 && nd.textContent.trim();
+          const mid = textAt(el.previousSibling) && textAt(el.nextSibling);
+          if (parseInt(st.fontWeight) >= 600 && pst0 && parseInt(pst0.fontWeight) < 600 && /^(B|STRONG|SPAN)$/.test(el.tagName) && mid) bold++;
+          if (txt.length < 6) continue;
+          // 同じ作り（要素名＋クラス＋親のクラス）ごとに、実際の大きさを集める
+          const role = el.tagName + "." + [...el.classList].sort().join(".") + "<" + (el.parentElement ? [...el.parentElement.classList].sort().join(".") : "");
+          const k = Math.round(effSize(el) * 2) / 2;
+          if (!sz.has(role)) sz.set(role, new Set());
+          sz.get(role).add(k);
+        }
+        const mixed = [...sz.entries()].filter(([, v]) => v.size > 1);
+        if (mixed.length) {
+          const [role, v] = mixed[0];
+          warnOut.push(`p${n}: 同じ作りの本文の文字が違う大きさで描かれている（${role.split("<")[0].toLowerCase()}：${[...v].sort((a, b) => a - b).join("・")}px）（§4.19: 同じ役割の文字は同じ大きさに）`);
+        }
+        if (bold >= 3) warnOut.push(`p${n}: 文の途中の太字が ${bold} か所（§5.5: 強調は目を向けたい1か所だけ。意味のない太字を外す）`);
+      }
       // 11. 片側だけの空き：タイトルの横幅を基準に、本文の文字・図形が占める横の範囲の外側を測る
       const ttl2 = s.querySelector("h1, .title, .ttl");
       if (ttl2) {
@@ -345,6 +467,24 @@ const { issues, warns } = await page.evaluate(() => {
       const body = [...s.querySelectorAll("li, td, p")].filter((el) => (el.textContent || "").trim().length > 8 && !el.closest(".src, .foot, .footer"));
       const bs = body.map(effSize).filter((v) => v > 0).sort((a, b) => a - b);
       sizes.push({ n, title: ttl ? effSize(ttl) : 0, body: bs.length ? bs[Math.floor(bs.length / 2)] : 0 });
+    }
+    // 17. 文字が、それを囲む箱（塗り・四辺の枠・表のセル）の外にはみ出している
+    if (!std) {
+      let over = 0;
+      for (const el of els) {
+        if (over >= 3 || el.closest("svg")) continue;
+        const rs = ownTextRects(el);
+        if (!rs.length) continue;
+        let box = el;
+        while (box && box !== s && !(box.matches("td, th") || isBoxed(getComputedStyle(box)))) box = box.parentElement;
+        if (!box || box === s) continue;
+        const bx = box.getBoundingClientRect();
+        const outBy = Math.max(...rs.map((r) => Math.max(bx.left - r.left, r.right - bx.right, bx.top - r.top, r.bottom - bx.bottom)));
+        if (outBy > 2) {
+          over++;
+          out.push(`p${n}: 文字が箱の外に ${Math.round(outBy)}px はみ出している「${(el.textContent || "").trim().slice(0, 20)}」（箱を広げる・文字を短くする・改行位置を変える）`);
+        }
+      }
     }
     for (const el of els) {
       const r = el.getBoundingClientRect();

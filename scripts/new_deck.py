@@ -15,7 +15,7 @@ new_deck.py — 2つのパーツ集から必要なパーツだけを取り出し
 
   --list   パーツ番号と型名の一覧を表示して終了
 """
-import argparse, pathlib, re, sys
+import argparse, pathlib, re, sys, unicodedata
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BASE = ROOT / "templates" / "freeform_parts_16x9.html"
@@ -78,7 +78,7 @@ def scope_css(css, prefix, section_classes=()):
                 if not t:
                     continue
                 head = re.split(r"[\s>+~]", t, maxsplit=1)[0]
-                if t.startswith(":root") or t.startswith("html") or t == "body" or t.startswith("body ") or head.startswith(".deck") or head.startswith(".skin-"):
+                if t.startswith(":root") or t.startswith("html") or t == "body" or t.startswith("body ") or t.startswith("body.") or head.startswith(".deck") or head.startswith(".skin-"):
                     parts.append(t)
                 elif head == prefix or head.startswith(prefix + ".") or head.startswith(prefix + ":") or head.startswith(prefix + "-") or t.startswith(prefix + " "):
                     parts.append(t)
@@ -211,6 +211,8 @@ def main():
 </main>
 </body></html>
 """
+    # ファイル名は NFC に揃える（macOS は濁点を分けた形で保存することがあり、Windows で文字化けして見える — slide-rules §8）
+    a.out = unicodedata.normalize("NFC", a.out)
     pathlib.Path(a.out).write_text(out, encoding="utf-8")
     print(f"wrote {a.out}: {len(picked)} slides（番号付き {page} ページ）")
 

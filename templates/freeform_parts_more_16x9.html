@@ -187,6 +187,7 @@ body {
 }
 
 .title {
+  word-break: auto-phrase; /* 折り返しは文節単位に任せ、<br> は泣き別れのときだけ（slide-rules §2.13） */
   margin: 10px 0 18px;
   max-width: 1360px;
   font-size: 39px;
@@ -3045,6 +3046,8 @@ body {
 .exsum ul li{position:relative;padding-left:1.2em;font-size:19.2px;line-height:1.6}
 .exsum ul li::before{content:"–";position:absolute;left:0}
 .exsum .es-ref{font-size:17px;color:var(--muted);text-align:right;white-space:nowrap}
+/* 社外向けに書き出すときは body に class="external" を付けて印刷すると、社内用のページ（section.internal）が外れる（slide-rules §8） */
+body.external section.internal{display:none!important}
 </style></head><body>
 <main class="deck skin-warm">
 <section class="slide slide--no-title-rule">
@@ -3212,7 +3215,7 @@ body {
     <div class="kicker">17  nested_row_matrix</div>
     <h1 class="title">入れ子行の行列</h1>
     <div class="rule"></div>
-    <div class="content"><div class="nrm"><div class="nrm-group" style="grid-row:1 / span 3; grid-column:1;">ラベル1</div><div class="nrm-rowlabel" style="grid-row:1; grid-column:2;">ラベル2</div><div class="nrm-content" style="grid-row:1; grid-column:3;"><ul class="nrm-bullets"><li>Text 1</li><li>Text 2</li></ul></div><div class="nrm-rowlabel" style="grid-row:2; grid-column:2;">ラベル3</div><div class="nrm-content" style="grid-row:2; grid-column:3;"><ul class="nrm-bullets"><li>Text 3</li><li>Text 4</li></ul></div><div class="nrm-rowlabel" style="grid-row:3; grid-column:2;">ラベル4</div><div class="nrm-content" style="grid-row:3; grid-column:3;"><ul class="nrm-bullets"><li>Text 5</li><li>Text 6</li></ul></div><div class="nrm-group" style="grid-row:4 / span 2; grid-column:1;">ラベル5</div><div class="nrm-rowlabel" style="grid-row:4; grid-column:2;">ラベル6</div><div class="nrm-content" style="grid-row:4; grid-column:3;"><ul class="nrm-bullets"><li>Text 7</li></ul></div><div class="nrm-rowlabel" style="grid-row:5; grid-column:2;">ラベル7</div><div class="nrm-content" style="grid-row:5; grid-column:3;"><ul class="nrm-bullets"><li>Text 8</li></ul></div></div></div>
+    <div class="content"><div class="nrm"><div class="nrm-group" style="grid-row:1 / span 3; grid-column:1;">ラベル1</div><div class="nrm-rowlabel" style="grid-row:1; grid-column:2;">ラベル2</div><div class="nrm-content" style="grid-row:1; grid-column:3;"><ul class="nrm-bullets"><li>Text 1</li><li>Text 2</li></ul></div><div class="nrm-rowlabel" style="grid-row:2; grid-column:2;">ラベル3</div><div class="nrm-content" style="grid-row:2; grid-column:3;"><ul class="nrm-bullets"><li>Text 3</li><li>Text 4</li></ul></div><div class="nrm-rowlabel" style="grid-row:3; grid-column:2;">ラベル4</div><div class="nrm-content" style="grid-row:3; grid-column:3;"><ul class="nrm-bullets"><li>Text 5</li><li>Text 6</li></ul></div><div class="nrm-group" style="grid-row:4 / span 2; grid-column:1;">ラベル5</div><div class="nrm-rowlabel" style="grid-row:4; grid-column:2;">ラベル6</div><div class="nrm-content" style="grid-row:4; grid-column:3;"><ul class="nrm-bullets"><li>Text 7</li><li>Text 7b</li></ul></div><div class="nrm-rowlabel" style="grid-row:5; grid-column:2;">ラベル7</div><div class="nrm-content" style="grid-row:5; grid-column:3;"><ul class="nrm-bullets"><li>Text 8</li><li>Text 8b</li></ul></div></div></div>
     <footer class="footer"><span class="source">出典：Source 1</span><span>18</span></footer>
   </div>
 </section>

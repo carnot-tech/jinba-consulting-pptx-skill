@@ -13,6 +13,7 @@
 終了コード: FAIL があれば 1。
 """
 import re
+from html.parser import HTMLParser
 import sys
 import zipfile
 from pathlib import Path
@@ -389,13 +390,17 @@ def check_forbidden(pages, raw=""):
             fail(f"禁止語リストの語が {where} に残っている（リスト{FORBIDDEN_TERMS.index(pat)+1}行目の語）")
 
 
-def check_title(idx, title, explicit_break=False):
+CLOSING_TITLE = re.compile(r"^(ご清聴)?ありがとうございました[。！!]?$|^Thank you", re.I)
+
+
+def check_title(idx, title, explicit_break=False, closing=False):
     # explicit_break: 意味の切れ目で明示改行済み（§2.13）なら2行想定の WARN は出さない
+    # closing: 表紙・裏表紙・締めのあいさつだけのページ。語尾の検査から外す
     t = title.strip()
     if not t:
         warn(f"p{idx}: タイトルが空（表紙/扉なら可）")
         return
-    if re.search(r"(です|ます|でした|ました)[。．.]?$", t):
+    if not closing and re.search(r"(です|ます|でした|ました)[。．.]?$", t):
         fail(f"p{idx}: タイトルがですます調 → 体言止めに: 「{t}」")
     # タイトルは PPTX/HTML とも2行まで許容。1行目安(TITLE_MAX=40字)超は WARN、2行にも収まらない長さ(>80字)だけ FAIL。
     # 文字を縮小して1行に詰めるのは不可（slide-rules §2.1）。
@@ -690,6 +695,109 @@ def _leaf_texts(fragment):
                 out.append(piece)
     return out
 
+# 文字化けの痕（置換文字・私用領域・制御文字）。ふだんの日本語の本文には出ない
+GARBLED = re.compile(r"[�-\x00-\x08\x0B\x0C\x0E-\x1F\x7F]")
+
+
+def check_garbled(idx, text):
+    """編集・並べ替え・変換の途中で文字が化けた痕を FAIL にする（slide-rules §8）"""
+    hits = GARBLED.findall(text)
+    if hits:
+        cps = sorted({f"U+{ord(c):04X}" for c in hits})
+        fail(f"p{idx}: 文字化けの痕 ×{len(hits)}（{' '.join(cps[:4])}）（元の文字に打ち直す。編集画面での並べ替え・変換のあとに起きやすい）")
+
+
+class _ListCounter(HTMLParser):
+    """ul/ol ごとに直下の li の数を数える（入れ子も別々に数える）"""
+    def __init__(self):
+        super().__init__()
+        self.stack, self.singles = [], []
+    def handle_starttag(self, tag, attrs):
+        if tag in ("ul", "ol"):
+            self.stack.append([0, ""])
+        elif tag == "li" and self.stack:
+            self.stack[-1][0] += 1
+    def handle_data(self, data):
+        if self.stack and self.stack[-1][0] == 1 and len(self.stack[-1][1]) < 30:
+            self.stack[-1][1] += data.strip()
+    def handle_endtag(self, tag):
+        if tag in ("ul", "ol") and self.stack:
+            n, txt = self.stack.pop()
+            if n == 1:
+                self.singles.append(txt)
+
+
+def check_single_item_lists(idx, fragment):
+    """§7.3: 箇条は2項目以上。1つしか書けないなら箇条をやめて地の文にする"""
+    pc = _ListCounter()
+    try:
+        pc.feed(fragment)
+    except Exception:
+        return
+    if pc.singles:
+        warn(f"p{idx}: 項目が1つだけの箇条書き ×{len(pc.singles)}: 「{pc.singles[0][:24]}」（§7.3: 箇条は2項目以上。1つなら地の文に）")
+
+
+def check_body_desu(idx, leaves, title):
+    """§7.4: 本文（ブレット・表のセル）も常体。です・ます で終わる項目を WARN（依頼のページの文は目視で可）"""
+    bad = [x for x in leaves if x != title and re.search(r"(です|ます|でした|ました)[。．.]?$", x)]
+    if bad:
+        warn(f"p{idx}: 本文がですます調 ×{len(bad)}: 「{bad[0][-24:]}」（§7.4: 本文も常体で。相手への依頼文だけは可）")
+
+
+CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"
+
+
+def check_numbered_labels(pages):
+    """§7.13・§7.33: 同じ丸数字の項目名がページによって違う（別の意味に同じ番号／言い換え）"""
+    seen = {}
+    for idx, text in pages:
+        for m in re.finditer(rf"([{CIRCLED}])\s*([^\s{CIRCLED}、。：:（(|｜→]{{2,16}})", text):
+            seen.setdefault(m.group(1), {}).setdefault(m.group(2), set()).add(idx)
+    for num, labels in seen.items():
+        if len(labels) > 1:
+            detail = " / ".join(f"「{k}」p{','.join(map(str, sorted(v)))}" for k, v in list(labels.items())[:3])
+            warn(f"番号つきの項目名が食い違う: {num} が {detail}（§7.13・§7.33: 同じ番号は同じ項目名で。別の意味なら番号を分ける）")
+            return
+
+
+def page_number(fragment):
+    """フッターに印字したページ番号（基本パーツ集 .foot の span／追加パーツ集 .footer の最後の span）"""
+    m = re.search(r'<div class="foot">.*?<span>\s*(\d+)\s*</span>', fragment, re.S) or \
+        re.search(r'<footer class="footer">(?:(?!</footer>).)*<span>\s*(\d+)\s*</span>\s*</footer>', fragment, re.S)
+    return int(m.group(1)) if m else None
+
+
+def check_page_numbers(nums):
+    """§4.45: 印字したページ番号は連番（表紙・章扉・裏表紙は番号を振らないので除く）"""
+    got = [(i, n) for i, n in nums if n is not None]
+    for (i0, a), (i1, b) in zip(got, got[1:]):
+        if b != a + 1:
+            fail(f"p{i1}: ページ番号が連番でない（前のページ {a} → {b}）（ページを足す・消すしたあとに振り直す。§4.45）")
+            return
+
+
+def header_label(fragment):
+    """本文ページの右上ラベルの有無。基本パーツは `.bar`/`.hdr` の中の `.date`、
+    追加パーツは `.kicker` がラベル。どちらも同じ「ラベル」として扱い、文字が入っているかで有無を見る。
+    タイトルより上だけを見る（グラフの棒 `.bar` などを拾わない）"""
+    head = re.split(r'<h1\b|class="[^"]*\b(?:ttl|title|msg)\b', fragment, maxsplit=1)[0]
+    m = re.search(r'<(\w+)[^>]*class="(?:[^"]*\s)?(?:kicker|date)(?:\s[^"]*)?"[^>]*>(.*?)</\1>', head, re.S)
+    text = re.sub(r"<[^>]+>", "", m.group(2)).strip() if m else ""
+    return "あり" if text else "なし"
+
+
+def check_header_consistency(heads):
+    """§4.19・§4.62: 本文ページの右上ラベル（タグチップ）の有無と作りをデッキで揃える"""
+    body = [(i, h) for i, h in heads if h is not None]
+    if len(body) < 4:
+        return
+    from collections import Counter
+    major, cnt = Counter(h for _, h in body).most_common(1)[0]
+    odd = [i for i, h in body if h != major]
+    if odd and cnt >= len(body) * 0.6:
+        warn(f"p{','.join(map(str, odd[:6]))}: 右上のラベルの有無・作りがほかの本文ページと違う（§4.19: 見出しまわりの作りはデッキで揃える）")
+
 
 def check_exec_summary(idx, title, fragment):
     """§7.16 エグゼクティブサマリーはページタイトルの羅列にせず、主文＋インデントした詳細の階層ブレットで書く"""
@@ -774,21 +882,28 @@ def check_html(path):
     parts = re.split(pat, html)
     slides = parts[1:] if len(parts) > 1 else []
     slide_classes = re.findall(pat.replace('class="(?:', 'class="((?:', 1).replace(')"[^>]*>', '))"[^>]*>', 1), html)
+    nums, heads = [], []
     for i, s in enumerate(slides, 1):
+        check_garbled(i, re.sub(r"<[^>]+>", " ", re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", s, flags=re.S)))
         m = re.search(r"<h1[^>]*>(.*?)</h1>", s, re.S) or re.search(r'class="[^"]*\b(?:ttl|title|msg)\b[^"]*"[^>]*>(.*?)</', s, re.S)
         raw_t = m.group(1) if m else ""
         t = re.sub(r"<[^>]+>", "", raw_t).strip()
         t = re.sub(r"\s+", " ", t)
         titles.append(t)
         cls = (slide_classes[i - 1] if i - 1 < len(slide_classes) else "").split()
+        nums.append((i, page_number(s)))
+        edge = bool({"cover", "chap", "back"} & set(cls))
         if "std" in cls:
             # 正本から差し込んだ定型ページ（§4.99）は文章・版面の検査を飛ばす
             shapes.append("")
             continue
+        if not edge:
+            heads.append((i, header_label(s)))
         # <br> で意味の切れ目に明示改行済み（§2.13）なら、各行が1行目安に収まる限り2行想定の WARN は出さない
         lines = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", x)).strip() for x in re.split(r"<br\s*/?>", raw_t)]
         explicit_break = len(lines) > 1 and all(_fwlen(x) <= TITLE_MAX for x in lines)
-        check_title(i, t, explicit_break)
+        closing = edge or (i == len(slides) and bool(CLOSING_TITLE.search(t)))
+        check_title(i, t, explicit_break, closing)
         check_count_match(i, t, re.sub(r"<[^>]+>", " ", s))
         leaves = _leaf_texts(s)
         check_body_placeholders(i, leaves, t)
@@ -796,12 +911,21 @@ def check_html(path):
         if "cover" not in cls:
             check_multi_sentence(i, leaves)
             check_trailing_period(i, [x for x in leaves if x != t])
+        if not closing:
+            check_body_desu(i, leaves, t)
+        check_single_item_lists(i, s)
         check_typed_bullets(i, s)
         shapes.append(page_shape(s))
     check_page_refs([(i, re.sub(r"<[^>]+>", " ", s)) for i, s in enumerate(slides, 1)])
     if not slides:
         warn("`.slide` 要素が見つからない（タイトル検査スキップ）")
     check_shape_runs(shapes)
+    if slides and not TEMPLATE_MODE:
+        check_page_numbers(nums)
+        check_header_consistency(heads)
+        check_numbered_labels([(i, re.sub(r"<[^>]+>", " ", s)) for i, s in enumerate(slides, 1)])
+    if re.search(r"word-break\s*:\s*keep-all", html):
+        warn("word-break:keep-all（括弧・句読点でしか折れず行が早く切れる。日本語は word-break:auto-phrase と lang=\"ja\" — §2.13）")
     check_static_ui(html)
     check_mixed_parts(html, slide_classes)
     check_production_meta(slides if slides else [html])
