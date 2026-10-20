@@ -440,8 +440,7 @@ body {
 }
 
 .phase {
-  min-height: 330px;
-  padding: 20px;
+  padding: 20px; /* 列の高さは中身なり（min-height で下を空けない） */
   border-right: 1px solid var(--hairline);
 }
 
@@ -451,13 +450,14 @@ body {
 
 .phase-year {
   color: var(--blue);
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 700;
 }
 
 .phase-title {
   margin-top: 12px;
-  font-size: 22px;
+  word-break: auto-phrase; /* 4列でも見出しが折れにくい大きさ。折れるなら見出しを短くする */
+  font-size: 19px;
   line-height: 1.2;
   font-weight: 700;
 }
@@ -1252,7 +1252,8 @@ body {
 
 .flow-title {
   margin: 0 0 10px;
-  font-size: 21px;
+  word-break: auto-phrase;
+  font-size: 20px;
   line-height: 1.18;
   font-weight: 700;
 }
@@ -1713,8 +1714,14 @@ body {
   align-items: flex-end;
   justify-content: center; /* 棒を中央に寄せ、棒どうしを離しすぎない */
   gap: 72px;
-  height: 360px;
-  padding-top: 10px;
+  height: 340px;
+  padding: 10px 48px 0;
+  width: fit-content;
+  margin: 0 auto 44px;
+  border-bottom: 2px solid var(--ink); /* 軸の線。棒はこの線に乗り、項目名は線の下（§5.26） */
+}
+.stack-chart > div {
+  position: relative;
 }
 
 .stack-col {
@@ -1739,7 +1746,10 @@ body {
 .stack-seg.s3 { background: var(--soft-blue); color: var(--ink); }
 
 .stack-col-label {
-  margin-top: 12px;
+  position: absolute;
+  top: calc(100% + 10px);
+  left: -24px;
+  right: -24px;
   font-size: 17px;
   line-height: 1.2;
   font-weight: 700;
@@ -3068,8 +3078,8 @@ body {
 
 /* エグゼクティブサマリー：本文のタイトル列に対応する行を、主文1本＋詳細2〜3本の階層ブレットで書く（slide-rules §7.16） */
 .exsum{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:20px}
-.exsum>li{display:grid;grid-template-columns:230px 1fr 110px;gap:28px;border-top:1px solid var(--rule);padding-top:16px}
-.exsum .es-tag{font-family:var(--pserif);font-weight:700;font-size:24.2px;color:var(--ink);line-height:1.4}
+.exsum>li{display:grid;grid-template-columns:280px 1fr 110px;gap:28px;border-top:1px solid var(--rule);padding-top:16px}
+.exsum .es-tag{font-family:var(--pserif);font-weight:700;font-size:21px;color:var(--ink);line-height:1.4;word-break:auto-phrase} /* 論点ラベル（全角12字前後）を1行に収める。折れるならラベルを短くする */
 .exsum .es-main{font-weight:700;font-size:21px;line-height:1.55;color:var(--ink)}
 .exsum ul{list-style:none;margin:8px 0 0;padding:0}
 .exsum ul li{position:relative;padding-left:1.2em;font-size:19.2px;line-height:1.6}

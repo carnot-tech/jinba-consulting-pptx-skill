@@ -24,6 +24,7 @@
 //  22. 文字が、ほかの要素の横罫（見出しの下罫・軸の線など）に重なっている（WARN）
 //  23. 同じ作りの箱の左端が、揃うはずの位置から少しずれている（ツリーの段の始まりなど。WARN。§4.51）
 //  24. 行のリスト（罫線で区切った行の並び）の間延び・左右2列の行の位置のずれ（WARN。§4.12・§4.51）
+//  25. 並べた見出し・大きな数字のうち、一部だけが2行に折れている（WARN。§4.51・§2.13）
 //   4 の補足: 版面の30%超が空いているときは WARN（40%超は FAIL）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
 // 使い方: node scripts/check_layout.mjs deck.html   （playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
@@ -584,6 +585,46 @@ const { issues, warns } = await page.evaluate(() => {
           if (!side || Math.abs(A.rs[0].top - B.rs[0].top) > 40) continue;
           const d = Math.max(...A.rs.map((r, k) => Math.abs(r.top - B.rs[k].top)));
           if (d > 4) { warnOut.push(`p${n}: 左右の列の行の位置が ${Math.round(d)}px ずれている（対応する行は同じ高さに揃える。行見出しが折れて高さが変わっていないか確かめる — §4.51）`); a = lists.length; break; }
+        }
+      }
+      // 25. 並べた見出し・大きな数字の折れの不揃い（同じ作りが横に並ぶ見出し、または同じ列の大きな数字）
+      {
+        const lineCount = (el) => {
+          const tops = new Set();
+          for (const r of ownTextRects(el)) tops.add(Math.round(r.top / 4));
+          return tops.size;
+        };
+        const groups = new Map();
+        for (const el of s.querySelectorAll("h2, h3, h4, div, p, td, span")) {
+          if (el.closest(".foot, .footer, footer, .src, .bar, .hdr, h1, .title, svg")) continue;
+          if (el.querySelector("br")) continue; // 意味の切れ目で改行したものは対象外
+          const own = ownTextRects(el);
+          if (!own.length) continue;
+          const st = getComputedStyle(el);
+          const fs = parseFloat(st.fontSize);
+          const isCell = el.tagName === "TD" || el.tagName === "TH";
+          if (isCell && fs < 20) continue; // 表は大きな数字の列だけ
+          if (!isCell && !(parseInt(st.fontWeight) >= 600 && fs >= 15)) continue; // 見出し（太字）だけ
+          const txt = [...el.childNodes].filter((x) => x.nodeType === 3).map((x) => x.textContent).join("").trim();
+          if (txt.length > 40) continue;
+          const key = el.tagName + "." + [...el.classList].sort().join(".") + "|" + Math.round(fs);
+          const anc = isCell ? el.closest("table") : el.parentElement?.parentElement;
+          if (!anc) continue;
+          if (!groups.has(anc)) groups.set(anc, {});
+          (groups.get(anc)[key] ||= []).push({ el, n: lineCount(el), txt });
+        }
+        let hit = 0;
+        for (const g of groups.values()) {
+          if (hit) break;
+          for (const items of Object.values(g)) {
+            if (items.length < 3) continue;
+            const one = items.filter((x) => x.n === 1), multi = items.filter((x) => x.n >= 2);
+            if (one.length && multi.length) {
+              hit = 1;
+              warnOut.push(`p${n}: 並べた見出し・数字のうち「${multi[0].txt.slice(0, 14)}」だけが ${multi[0].n} 行に折れている（ほかは1行。見出しを短くする・列を広げる・文字を一段小さくして全部を1行に揃える — §4.51）`);
+              break;
+            }
+          }
         }
       }
       // 11. 片側だけの空き：タイトルの横幅を基準に、本文の文字・図形が占める横の範囲の外側を測る

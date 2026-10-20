@@ -72,7 +72,7 @@ h1{margin:4.5mm 0 0 0;font-family:var(--font-serif);font-size:22pt;line-height:1
 table{border-collapse:collapse;width:100%;font-size:11.5pt;flex:0 0 auto}
 th{background:none;text-align:left;padding:2.5mm;font-size:14.5pt;font-weight:700;color:var(--navy);border-bottom:1.8px solid var(--navy)}
 td{padding:3mm 2.5mm;border-bottom:1px solid var(--rule);vertical-align:middle;line-height:1.45;color:var(--ink)} /* 上下の余白と行間を詰めて、行が間延びしないようにする（§4.12） */
-td.b{font-weight:700;color:var(--navy)}
+td.b{font-weight:700;color:var(--navy);white-space:nowrap} /* 数字を折らない（「約／86%」と折れると大きさが違って見える） */
 tr:last-child td{border-bottom:0}
 td.ax{font-size:12.5pt;line-height:1.35;font-weight:700;color:var(--accent);font-family:var(--font-serif);border-right:1.8px solid var(--navy)} /* 行見出しは列の見出し（14.5pt）より小さく、本文（11.5pt）より大きく（§6） */
 th.ax{border-right:1.8px solid var(--navy)}
@@ -124,11 +124,11 @@ table.eq{table-layout:fixed}
 .axh .u{font-family:var(--font-sans);font-size:8.5pt;font-weight:400;color:var(--muted)}
 .note{font-size:8pt;letter-spacing:.08em;font-weight:700;color:var(--accent);border-bottom:1px solid var(--cyan);align-self:flex-start;padding-bottom:.8mm;flex:0 0 auto}
 /* 左サイドの主張パネル */
-.side{display:grid;grid-template-columns:62mm 1fr;gap:0;flex:1;min-height:0}
+.side{display:grid;grid-template-columns:62mm 1fr;gap:0;flex:0 1 auto;min-height:0;margin:auto 0} /* 中身の高さで上下中央。パネルをページの高さまで伸ばさない（§4.12） */
 .side .sp{background:var(--navy);color:#fff;padding:6mm 6mm;display:flex;flex-direction:column}
 .side .sp .cn{font-family:var(--font-serif);font-size:26pt;font-weight:700;color:var(--cyan);line-height:1}
 .side .sp .ct{font-size:9.5pt;font-weight:700;letter-spacing:.08em;color:var(--cyan);margin-top:1.5mm}
-.side .sp .cm{font-family:var(--font-serif);font-size:14pt;font-weight:700;line-height:1.55;margin-top:auto}
+.side .sp .cm{font-family:var(--font-serif);font-size:14pt;font-weight:700;line-height:1.55;margin-top:5mm} /* 主張の文を最下部へ押し下げない（パネルの中に空きを作らない） */
 .side .sb{padding:0 0 0 8mm;display:flex;flex-direction:column;min-height:0}
 /* レバー矢印表 */
 .lev{width:100%;border-collapse:collapse;font-size:11.5pt}

@@ -811,3 +811,21 @@ class CoverPlaceholder(unittest.TestCase):
 
     def test_good_deck_cover_passes(self):
         self.assertFalse(any("見本の文言" in l for l in run(GOOD)[1]))
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class UnevenWrap(LayoutFeedback20261012):
+    """check_layout：並べた見出しのうち一部だけが折れている（WARN）"""
+
+    def cols(self, titles):
+        cell = '<div><h3 style="font-size:20px;font-weight:700;margin:0">{t}</h3><p>説明の文</p></div>'
+        return ('<div style="display:grid;grid-template-columns:repeat(4,160px);gap:20px">'
+                + "".join(cell.format(t=t) for t in titles) + '</div><div style="height:260px;border:1px solid #333">図</div>')
+
+    def test_one_heading_wrapped_warns(self):
+        out = self.layout(self.cols(["土台づくり", "試行", "本番化", "成果検証と全社への拡大判断"]))
+        self.assertTrue(any("折れている" in l for l in out), out)
+
+    def test_all_one_line_passes(self):
+        out = self.layout(self.cols(["土台づくり", "試行", "本番化", "拡大判断"]))
+        self.assertFalse(any("折れている" in l for l in out), out)
