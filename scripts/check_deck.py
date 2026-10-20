@@ -768,12 +768,22 @@ def page_number(fragment):
     return int(m.group(1)) if m else None
 
 
-TYPE_ID = re.compile(r"(?<![\w/.])\d{2}\s+[a-z]+(?:_[a-z]+)+(?![\w.])")
+def _part_type_ids():
+    """追加パーツ集の英語の型ID（右上ラベル「05  chart_insight」の chart_insight）。テンプレが無い環境では空。"""
+    fp = Path(__file__).resolve().parent.parent / "templates" / "freeform_parts_more_16x9.html"
+    if not fp.exists():
+        return set()
+    return set(re.findall(r'class="kicker">\s*\d{2}\s+([a-z]+(?:_[a-z]+)+)\s*<', fp.read_text(encoding="utf8", errors="ignore")))
+
+
+_TYPE_IDS = _part_type_ids()
+# パーツ集にある型IDだけを見る（表の「05」「user_id」のような列の並びを型IDと取り違えない）
+TYPE_ID = re.compile(r"(?<![\w/.])\d{2}\s+(?:" + "|".join(sorted(map(re.escape, _TYPE_IDS), key=len, reverse=True)) + r")(?![\w.])") if _TYPE_IDS else None
 
 
 def check_type_id(idx, text):
     """パーツの英語の型ID（「05 chart_insight」など）が右上のラベルや本文に残っていないか"""
-    m = TYPE_ID.search(text)
+    m = TYPE_ID.search(text) if TYPE_ID else None
     if m:
         fail(f"p{idx}: パーツの型ID「{m.group(0)}」が残っている（右上のラベルはそのページの話題を日本語で書く。§4.13）")
 

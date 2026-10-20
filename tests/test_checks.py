@@ -645,6 +645,11 @@ class TypeIdLeftover(unittest.TestCase):
     def test_good_deck_has_no_type_id(self):
         self.assertFalse(any("型ID" in l for l in run(GOOD)[1]))
 
+    def test_table_number_and_snake_case_is_not_type_id(self):
+        # 表の「05」「user_id」のような並びは型IDではない
+        code, fails = run(inject("<span>3</span>", "<span>3</span><table><tr><td>05</td><td>user_id</td></tr></table>"))
+        self.assertFalse(any("型ID" in l for l in fails), fails)
+
 
 @unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
 class BarAxisAndColors(LayoutFeedback20261012):
