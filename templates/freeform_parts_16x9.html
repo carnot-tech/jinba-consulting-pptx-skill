@@ -145,13 +145,14 @@ table.eq{table-layout:fixed}
 /* 4=大きく改善 3=改善 0=横ばい 2=悪化（悪化だけ意味のある赤。§5.8） */
 .hm .v4{background:var(--navy)}.hm .v3{background:var(--accent)}.hm .v2{background:var(--rose)}.hm .v1{background:var(--soft)}.hm .v0{background:var(--hairline)}
 /* ハーベイボール */
-.hb{width:4.6mm;height:4.6mm;display:inline-block;border:1px solid var(--navy);border-radius:50%;position:relative;vertical-align:-.7mm}
-.hb i{position:absolute;inset:0;background:var(--navy);border-radius:50%}
-.hb.q1 i{clip-path:polygon(50% 50%,50% 0,100% 0,100% 50%)}
-.hb.q2 i{clip-path:polygon(50% 0,100% 0,100% 100%,50% 100%)}
-.hb.q3 i{clip-path:polygon(50% 50%,50% 0,100% 0,100% 100%,0 100%,0 50%)}
-.hb.q4 i{clip-path:none}
-.hb.q0 i{display:none}
+.hb{width:4.6mm;height:4.6mm;display:inline-block;box-sizing:border-box;border:1px solid var(--navy);border-radius:50%;vertical-align:-.7mm;background:conic-gradient(var(--navy) var(--hbp,0%),transparent 0) border-box}
+/* 塗りは外枠ごと1枚で描く（内側の<i>を枠の内側に重ねると縁に白い隙間が出て塗りが中途半端に見える） */
+.hb i{display:none}
+.hb.q0{--hbp:0%}
+.hb.q1{--hbp:25%}
+.hb.q2{--hbp:50%}
+.hb.q3{--hbp:75%}
+.hb.q4{--hbp:100%}
 /* ドットマトリクス */
 .dots{display:grid;grid-template-columns:repeat(10,1fr);gap:1.2mm;width:36mm}
 .dots i{width:3mm;height:3mm;background:var(--hairline);display:block}

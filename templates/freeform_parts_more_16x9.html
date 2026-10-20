@@ -2970,13 +2970,14 @@ body {
 .parts .v0 { background: var(--hairline); }
 
 /* ハーベイボール（パーツ14） */
-.parts .hb { width: 22px; height: 22px; display: inline-block; border: 1px solid var(--ink); border-radius: 50%; position: relative; vertical-align: -3px; }
-.parts .hb i { position: absolute; inset: 0; background: var(--ink); border-radius: 50%; }
-.parts .hb.q1 i { clip-path: polygon(50% 50%, 50% 0, 100% 0, 100% 50%); }
-.parts .hb.q2 i { clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%); }
-.parts .hb.q3 i { clip-path: polygon(50% 50%, 50% 0, 100% 0, 100% 100%, 0 100%, 0 50%); }
-.parts .hb.q4 i { clip-path: none; }
-.parts .hb.q0 i { display: none; }
+.parts .hb{width:22px;height:22px;display:inline-block;box-sizing:border-box;border:1px solid var(--ink);border-radius:50%;vertical-align:-3px;background:conic-gradient(var(--ink) var(--hbp,0%),transparent 0) border-box}
+/* 塗りは外枠ごと1枚で描く（内側の<i>を枠の内側に重ねると縁に白い隙間が出て塗りが中途半端に見える） */
+.parts .hb i{display:none}
+.parts .hb.q0{--hbp:0%}
+.parts .hb.q1{--hbp:25%}
+.parts .hb.q2{--hbp:50%}
+.parts .hb.q3{--hbp:75%}
+.parts .hb.q4{--hbp:100%}
 
 /* ドットマトリクス（パーツ15） */
 .parts .dots { display: grid; grid-template-columns: repeat(10, 10px); gap: 4px; }
