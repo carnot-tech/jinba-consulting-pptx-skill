@@ -723,6 +723,22 @@ def check_garbled(idx, text):
         fail(f"p{idx}: 文字化けの痕 ×{len(hits)}（{' '.join(cps[:4])}）（元の文字に打ち直す。編集画面での並べ替え・変換のあとに起きやすい）")
 
 
+FRAMEWORK_NAME = re.compile(r"(Situation|Complication|Resolution|So What\??|Why So\??|MECE|SCR|Issue|Key Takeaways?)", re.I)
+JA = r"[\u3040-\u30ff\u4e00-\u9fff]"
+HALF_COMMA = re.compile(JA + r",\s?" + JA)
+
+
+def check_framework_and_commas(idx, leaves, vis):
+    """§7.32: 英語の思考の枠組みの名前（Situation／Complication／Resolution 等）を見出し・列名に書かない。
+    日本語の文の中の半角カンマは読点「、」にする"""
+    hit = [x for x in leaves if FRAMEWORK_NAME.fullmatch(x.strip())]
+    if hit:
+        fail(f"p{idx}: 思考の枠組みの名前「{hit[0]}」が見出し・列名に出ている（作り手の道具。「これまで／課題／対策」のように中身の言葉にする — §7.32）")
+    m = HALF_COMMA.search(vis)
+    if m:
+        warn(f"p{idx}: 日本語の文の中に半角カンマ「{m.group(0)}」（読点「、」にする）")
+
+
 WORK_FILES = re.compile(r"\b(sources|qa|REPORT)\.md\b")
 
 
@@ -961,6 +977,7 @@ def check_html(path):
         check_count_match(i, t, re.sub(r"<[^>]+>", " ", s))
         leaves = _leaf_texts(s)
         check_body_placeholders(i, leaves, t)
+        check_framework_and_commas(i, leaves, vis)
         check_exec_summary(i, t, s)
         if "cover" not in cls:
             check_multi_sentence(i, leaves)

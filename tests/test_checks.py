@@ -820,6 +820,21 @@ class WorkFilesInDeck(unittest.TestCase):
         self.assertFalse(any("作り手の控え" in l for l in run(GOOD)[1]))
 
 
+class FrameworkLabelsAndCommas(unittest.TestCase):
+    """check_deck：思考の枠組みの名前の見出し（FAIL）、日本語の文の中の半角カンマ（WARN）（§7.32）"""
+
+    def test_framework_label_fails(self):
+        html = GOOD.replace('<div class="l">現状</div>', '<div class="l">Situation</div>', 1)
+        self.assertTrue(any("思考の枠組みの名前" in l for l in run(html)[1]))
+
+    def test_half_comma_warns(self):
+        html = GOOD.replace("差し戻しの6割は添付漏れ", "差し戻しの6割は添付漏れ,残りは記入誤り", 1)
+        self.assertTrue(any("半角カンマ" in l for l in warns(html)))
+
+    def test_good_deck_passes(self):
+        self.assertFalse(any("思考の枠組みの名前" in l or "半角カンマ" in l for l in run(GOOD)[1] + warns(GOOD)))
+
+
 class CoverPlaceholder(unittest.TestCase):
     """check_deck：表紙・裏表紙に見本の文言（当社・会社名・連絡先・「表紙」のラベル）が残っていたら FAIL"""
 
