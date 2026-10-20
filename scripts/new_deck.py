@@ -220,8 +220,9 @@ def main():
 (function () {{
   var printing = window.matchMedia ? window.matchMedia("print") : null;
   function fit() {{
-    var avail = Math.max(320, document.documentElement.clientWidth - 24);
+    var avail = Math.max(1, document.documentElement.clientWidth - 24);
     document.querySelectorAll(".deck > .s, .deck > .slide, .fitwrap > .s, .fitwrap > .slide").forEach(function (el) {{
+      if (!el.offsetWidth) return;  // 隠したスライド（社外版の .internal など）は包まない
       var wrap = el.parentElement;
       if (!wrap.classList.contains("fitwrap")) {{
         var cs = getComputedStyle(el);

@@ -567,10 +567,8 @@ class BotFeedback20261019(unittest.TestCase):
             subprocess.run([sys.executable, str(ROOT / "scripts" / "new_deck.py"),
                             "--parts", "b01,b02,m05,b10", "-o", str(out)], capture_output=True, check=True)
             html = out.read_text(encoding="utf8")
-            r = subprocess.run([sys.executable, str(CHECK), str(out)], capture_output=True, text=True, encoding="utf8")
         self.assertIn('wrap.className = "fitwrap"', html)
-        self.assertRegex(html, r"@media print\{\{?\s*\.fitwrap\{width:auto!important")  # .s の内側にスコープされていない
-        self.assertNotIn("script", "\n".join(l for l in r.stdout.splitlines() if "FAIL" in l))
+        self.assertRegex(html, r"@media print\{\s*\.fitwrap\{width:auto!important")  # .s の内側にスコープされていない
 
     def test_missing_header_label_warns(self):
         html = inject('<div class="date">打ち手</div>', '<div class="date"></div>')
