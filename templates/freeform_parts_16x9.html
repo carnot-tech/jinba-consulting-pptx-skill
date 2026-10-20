@@ -72,10 +72,10 @@ h1{margin:4.5mm 0 0 0;font-family:var(--font-serif);font-size:22pt;line-height:1
 .stat.l .cp{color:var(--muted)}
 table{border-collapse:collapse;width:100%;font-size:11.5pt;flex:0 0 auto}
 th{background:none;text-align:left;padding:2.5mm;font-size:14.5pt;font-weight:700;color:var(--navy);border-bottom:1.8px solid var(--navy)}
-td{padding:4.5mm 2.5mm;border-bottom:1px solid var(--rule);vertical-align:middle;line-height:1.65;color:var(--ink)}
+td{padding:3mm 2.5mm;border-bottom:1px solid var(--rule);vertical-align:middle;line-height:1.45;color:var(--ink)} /* 上下の余白と行間を詰めて、行が間延びしないようにする（§4.12） */
 td.b{font-weight:700;color:var(--navy)}
 tr:last-child td{border-bottom:0}
-td.ax{font-size:14.5pt;font-weight:700;color:var(--accent);font-family:var(--font-serif);border-right:1.8px solid var(--navy)}
+td.ax{font-size:12.5pt;line-height:1.35;font-weight:700;color:var(--accent);font-family:var(--font-serif);border-right:1.8px solid var(--navy)} /* 行見出しは列の見出し（14.5pt）より小さく、本文（11.5pt）より大きく（§6） */
 th.ax{border-right:1.8px solid var(--navy)}
 /* 表は中身の高さのまま上下中央に置く。容器ごと中央寄せすると出典(.src)まで持ち上がるので、表自身の上下 margin:auto で寄せる（§4.12・§4.47） */
 .c>table{flex:0 0 auto;height:auto;margin:auto 0}
@@ -97,7 +97,7 @@ table.eq{table-layout:fixed}
 .two>div:first-child table{flex:0 1 auto}
 .two>div>ul{flex:1;display:flex;flex-direction:column;justify-content:center} /* 左右どちらのブレットも縦中央（§4.5 下端揃え） */
 /* カラム見出し（.colh）と軸タイトル（.axh）は同じ高さ・同じ余白にして左右で罫線が揃うようにする（§4.21） */
-.two .colh,.axh{font-family:var(--font-serif);font-size:11.5pt;font-weight:700;color:var(--navy);border-bottom:1.8px solid var(--navy);height:7mm;box-sizing:content-box;padding:0 0 1.5mm 0;margin:0 0 3.5mm 0;flex:0 0 auto;display:flex;justify-content:space-between;align-items:flex-end}
+.two .colh,.axh{font-family:var(--font-serif);font-size:14.5pt;font-weight:700;color:var(--navy);border-bottom:1.8px solid var(--navy);height:7mm;box-sizing:content-box;padding:0 0 1.5mm 0;margin:0 0 3.5mm 0;flex:0 0 auto;display:flex;justify-content:space-between;align-items:flex-end}
 .two .colh{color:var(--accent)}
 .two ul{margin:0;padding-left:4.5mm;font-size:10pt;line-height:1.8;color:var(--ink)}
 .two li{margin-bottom:2.5mm}
@@ -139,7 +139,7 @@ table.eq{table-layout:fixed}
 .lev .up{background:var(--accent)}.lev .dn{background:var(--rule);color:var(--navy)}
 /* 状態ヒートマップ */
 .hm{width:100%;border-collapse:collapse;font-size:9.5pt}
-.hm th{font-size:10.5pt;padding:2mm}
+.hm th{font-size:13pt;padding:2mm} /* 見出し行は行見出し（12.5pt）より大きく（§6） */
 .hm td{padding:2.2mm 2.5mm;border-bottom:1px solid var(--hairline)}
 .hm .cell{display:block;height:8mm}
 /* 4=大きく改善 3=改善 0=横ばい 2=悪化（悪化だけ意味のある赤。§5.8） */

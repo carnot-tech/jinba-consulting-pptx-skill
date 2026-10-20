@@ -18,6 +18,9 @@
 //  16. 塗り・枠のある大きな箱の中が半分以上空いている（WARN。§4.54: 箱で囲っても空きは空き）
 //  17. 文字が箱・セルの外にはみ出している（FAIL）
 //  18. 同じ作りの本文の文字が違う大きさ・文の途中の太字が3か所以上（WARN。§4.19・§5.5）
+//  19. 棒グラフ: 項目名が軸の線より上にある（棒が線から浮いている）・凡例なしで棒の色が分かれている（WARN。§5.26・§5.5）
+//  20. 表の行の上下が間延びしている（行の高さから文字の高さを引いた余りが、文字の大きさの2.2倍超。WARN。§4.12）
+//  21. 列・軸の見出しが、その下の本文や行見出しより小さい（WARN。§6・§4.21）
 //   4 の補足: 版面の30%超が空いているときは WARN（40%超は FAIL）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
 // 使い方: node scripts/check_layout.mjs deck.html   （playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
@@ -410,6 +413,91 @@ const { issues, warns } = await page.evaluate(() => {
           warnOut.push(`p${n}: 同じ作りの本文の文字が違う大きさで描かれている（${role.split("<")[0].toLowerCase()}：${[...v].sort((a, b) => a - b).join("・")}px）（§4.19: 同じ役割の文字は同じ大きさに）`);
         }
         if (bold >= 3) warnOut.push(`p${n}: 文の途中の太字が ${bold} か所（§5.5: 強調は目を向けたい1か所だけ。意味のない太字を外す）`);
+      }
+      // 19. 棒グラフ（塗りの箱が3本以上、下端を揃えて並ぶもの）の軸の線と項目名、色
+      {
+        const cand = [];
+        for (const el of s.querySelectorAll("div, span, i")) {
+          if (el.closest("table, .foot, .footer, footer, .legend")) continue;
+          if ((el.textContent || "").trim()) continue;
+          const st = getComputedStyle(el);
+          if (!isFilled(st)) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width < 8 || r.width > sr.width * 0.25 || r.height < 4) continue;
+          cand.push({ el, r, bg: st.backgroundColor });
+        }
+        // 同じ親（または祖父）の下に並ぶ箱を1つの棒の並びとみなす（下端がずれていても拾う）
+        const groups = new Map();
+        for (const c of cand) for (const k of [c.el.parentElement, c.el.parentElement?.parentElement]) if (k) { if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); }
+        let barHit = 0;
+        for (const g of [...groups.values()].sort((a, b) => b.length - a.length)) {
+          if (barHit) break;
+          if (g.length < 3) continue;
+          const ws = g.map((c) => c.r.width);
+          if (Math.max(...ws) / Math.min(...ws) > 1.3) continue;
+          const hs = new Set(g.map((c) => Math.round(c.r.height)));
+          if (hs.size < 2) continue; // 高さが全部同じなら棒グラフではない（チップ・目盛りの並び）
+          // 横に並んでいるもの（縦の範囲が重なる）だけ
+          if (Math.max(...g.map((c) => c.r.top)) > Math.min(...g.map((c) => c.r.bottom))) continue;
+          barHit = 1;
+          const L = Math.min(...g.map((c) => c.r.left)), R = Math.max(...g.map((c) => c.r.right));
+          const bottom = Math.max(...g.map((c) => c.r.bottom)), low = Math.min(...g.map((c) => c.r.bottom));
+          if (bottom - low > 3) warnOut.push(`p${n}: 棒の下端が ${Math.round(bottom - low)}px ずれている（項目名の行数で棒が押し上げられている。棒は同じ軸の線に乗せる — §5.26）`);
+          // 棒の下端より下にある、棒の並びの幅いっぱいの横線（軸の線）
+          let axisY = null;
+          for (const el of s.querySelectorAll("*")) {
+            const st = getComputedStyle(el), r = el.getBoundingClientRect();
+            if (r.left > L + 2 || r.right < R - 2) continue;
+            if (parseFloat(st.borderBottomWidth) >= 1 && st.borderBottomStyle !== "none" && r.bottom >= bottom - 2 && r.bottom <= bottom + 80) axisY = axisY === null ? r.bottom : Math.min(axisY, r.bottom);
+          }
+          if (axisY !== null && axisY - bottom > 4) {
+            const between = els.some((el) => ownTextRects(el).some((t) => t.left >= L - 4 && t.right <= R + 4 && t.top >= bottom - 2 && t.bottom <= axisY + 2));
+            if (between) warnOut.push(`p${n}: 棒グラフの項目名が軸の線より上にある（棒が線から浮いている。棒を軸の線に乗せ、項目名は線の下に出す — §5.26）`);
+          }
+          const colors = new Set(g.map((c) => c.bg));
+          const legend = s.querySelector('[class*="legend"]') || /凡例/.test(s.textContent || "");
+          if (colors.size >= 2 && !legend) warnOut.push(`p${n}: 棒の色が ${colors.size} 色に分かれているのに凡例が無い（色を変えるのは目を向けたい1本だけにし、凡例か注記で理由を書く — §5.5）`);
+        }
+      }
+      // 20. 表の行の間延び（13 の引き伸ばしとは別に、セルの上下の余白と行間が大きすぎる行を拾う）
+      for (const t of s.querySelectorAll("table")) {
+        const ratios = [];
+        for (const tr of t.rows) {
+          if ([...tr.cells].every((c) => c.tagName === "TH")) continue;
+          let top = Infinity, bot = -Infinity, fs = 0;
+          for (const c of tr.cells) for (const el of [c, ...c.querySelectorAll("*")]) for (const x of ownTextRects(el)) { top = Math.min(top, x.top); bot = Math.max(bot, x.bottom); fs = Math.max(fs, parseFloat(getComputedStyle(el).fontSize)); }
+          if (bot > top && fs) ratios.push((tr.getBoundingClientRect().height - (bot - top)) / fs);
+        }
+        if (ratios.length >= 2) {
+          const med = ratios.sort((a, b) => a - b)[Math.floor(ratios.length / 2)];
+          if (med > 2.2) { warnOut.push(`p${n}: 表の行の上下が間延びしている（行の余白が文字の ${med.toFixed(1)} 倍。セルの上下の余白と行間を詰める — §4.12）`); break; }
+        }
+      }
+      // 21. 見出しが、その下の本文より小さい（列の見出し・軸の見出し・表の見出し行）
+      {
+        const heads = [...s.querySelectorAll("th, .colh, .axh, .section-label, h2, h3, h4")].filter((h) => !h.closest("tbody tr:not(:first-child)") && (h.textContent || "").trim().length <= 40);
+        for (const h of heads) {
+          const hs = effSize(h);
+          if (!hs) continue;
+          let below = [];
+          if (h.tagName === "TH") {
+            const t = h.closest("table");
+            below = [...t.querySelectorAll("td")];
+          } else {
+            let nx = h.nextElementSibling;
+            while (nx && !(nx.textContent || "").trim()) nx = nx.nextElementSibling;
+            if (nx) below = [nx, ...nx.querySelectorAll("*")];
+          }
+          // 大きく見せる数字（「72%」「約1,500人月」など）は見出しと比べない
+          const isNum = (el) => /^[\s\d.,%％+\-−〜~約万億千円人件倍月年社pt]+$/.test([...el.childNodes].filter((x) => x.nodeType === 3).map((x) => x.textContent).join("").trim());
+          const sizes = below.filter((el) => ownTextRects(el).length && !isNum(el) && !el.closest(".src, .source, .legend, .stack-legend") && el.tagName !== "TH").map(effSize).filter((v) => v > 0);
+          if (!sizes.length) continue;
+          const big = Math.max(...sizes);
+          if (hs < big * 0.97) {
+            warnOut.push(`p${n}: 見出し「${(h.textContent || "").trim().slice(0, 16)}」が、その下の文字より小さい（${Math.round(hs)}px < ${Math.round(big)}px。見出しは本文・行見出しより大きくする — §6・§4.21）`);
+            break;
+          }
+        }
       }
       // 11. 片側だけの空き：タイトルの横幅を基準に、本文の文字・図形が占める横の範囲の外側を測る
       const ttl2 = s.querySelector("h1, .title, .ttl");

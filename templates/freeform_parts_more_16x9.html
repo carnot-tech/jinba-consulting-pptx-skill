@@ -350,11 +350,13 @@ body {
   gap: 24px;
   align-items: stretch;
   height: 360px;
-  border-bottom: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink); /* 軸の線。棒はこの線に乗り、項目名は線の下に出す（slide-rules §5.26） */
   padding-bottom: 0;
+  margin-bottom: 52px; /* 線の下に出す項目名（2行まで）の場所 */
 }
 
 .bar-wrap {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -368,6 +370,8 @@ body {
   background: var(--navy);
 }
 
+/* 棒は1色。色を変えるのは目を向けたい1本（.hl）だけにし、変えたら凡例か注記で理由を書く（slide-rules §5.5） */
+.bar.hl,
 .bar.blue {
   background: var(--blue);
 }
@@ -377,7 +381,10 @@ body {
 }
 
 .bar-label {
-  margin-top: 8px;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
   text-align: center;
   font-size: 17px;
   line-height: 1.15;
@@ -541,11 +548,13 @@ body {
   grid-template-columns: repeat(6, 1fr);
   gap: 20px;
   align-items: end;
-  height: 390px;
-  border-bottom: 2px solid var(--ink);
+  height: 340px;
+  border-bottom: 2px solid var(--ink); /* 軸の線。棒はこの線に乗り、項目名は線の下に出す（slide-rules §5.26） */
+  margin-bottom: 52px;
 }
 
 .wf-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -573,8 +582,10 @@ body {
 }
 
 .wf-label {
-  margin-top: 10px;
-  min-height: 44px;
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  right: 0;
   text-align: center;
   font-size: 17px;
   line-height: 1.15;
@@ -1749,6 +1760,11 @@ body {
 .stack-legend .legend-swatch.s0 { background: var(--navy); border-color: var(--navy); }
 .stack-legend .legend-swatch.s1 { background: var(--blue); border-color: var(--blue); }
 .stack-legend .legend-swatch.s2 { background: var(--cyan); border-color: var(--cyan); }
+.stack-legend .legend-swatch.down {
+  background: var(--rose);
+  border-color: var(--rose);
+}
+
 .stack-legend .legend-swatch.s3 { background: var(--soft-blue); }
 
 /* True waterfall: floating cumulative bars */
@@ -3095,7 +3111,7 @@ body.external section.internal{display:none!important}
     <div class="kicker">05  chart_insight</div>
     <h1 class="title">単一チャート＋含意</h1>
     <div class="rule"></div>
-    <div class="content"><div class="two-col"><div><div class="section-label">指標名、単位</div><div class="bar-chart" style="grid-template-columns: repeat(4, minmax(0, 1fr));"><div class="bar-wrap"><div class="bar-value">32</div><div class="bar" style="height: 45%;"></div><div class="bar-label">ラベル1</div></div><div class="bar-wrap"><div class="bar-value">41</div><div class="bar" style="height: 58%;"></div><div class="bar-label">ラベル2</div></div><div class="bar-wrap"><div class="bar-value">49</div><div class="bar cyan" style="height: 69%;"></div><div class="bar-label">ラベル3</div></div><div class="bar-wrap"><div class="bar-value">58</div><div class="bar blue" style="height: 82%;"></div><div class="bar-label">ラベル4</div></div></div></div><div class="insight-panel"><div class="section-label">タイトル 2</div><div class="body-copy">Text 1</div></div></div></div>
+    <div class="content"><div class="two-col"><div><div class="section-label">指標名、単位</div><div class="bar-chart" style="grid-template-columns: repeat(4, minmax(0, 1fr));"><div class="bar-wrap"><div class="bar-value">32</div><div class="bar" style="height: 45%;"></div><div class="bar-label">ラベル1</div></div><div class="bar-wrap"><div class="bar-value">41</div><div class="bar" style="height: 58%;"></div><div class="bar-label">ラベル2</div></div><div class="bar-wrap"><div class="bar-value">49</div><div class="bar" style="height: 69%;"></div><div class="bar-label">ラベル3</div></div><div class="bar-wrap"><div class="bar-value">58</div><div class="bar" style="height: 82%;"></div><div class="bar-label">ラベル4</div></div></div></div><div class="insight-panel"><div class="section-label">タイトル 2</div><div class="body-copy">Text 1</div></div></div></div>
     <footer class="footer"><span class="source">注：前提・注記を記載 出典：Source 1</span><span>6</span></footer>
   </div>
 </section>
@@ -3115,7 +3131,7 @@ body.external section.internal{display:none!important}
     <div class="kicker">07  waterfall</div>
     <h1 class="title">寄与度ブリッジ</h1>
     <div class="rule"></div>
-    <div class="content"><div class="two-col"><div><div class="section-label">指標名、単位</div><div class="waterfall"><div class="wf-item"><div class="wf-value">100</div><div class="wf-bar" style="height: 50%;"></div><div class="wf-label">ラベル1</div></div><div class="wf-item"><div class="wf-value">+18</div><div class="wf-bar up" style="height: 9%;"></div><div class="wf-label">ラベル2</div></div><div class="wf-item"><div class="wf-value">+24</div><div class="wf-bar up" style="height: 12%;"></div><div class="wf-label">ラベル3</div></div><div class="wf-item"><div class="wf-value">-9</div><div class="wf-bar down" style="height: 5%;"></div><div class="wf-label">ラベル4</div></div><div class="wf-item"><div class="wf-value">+7</div><div class="wf-bar up" style="height: 4%;"></div><div class="wf-label">ラベル5</div></div><div class="wf-item"><div class="wf-value">140</div><div class="wf-bar blue" style="height: 70%;"></div><div class="wf-label">ラベル6</div></div></div></div><div class="insight-panel"><div class="section-label">タイトル 2</div><div class="body-copy">Text 1</div></div></div></div>
+    <div class="content"><div class="two-col"><div><div class="section-label">指標名、単位</div><div class="stack-legend"><div class="legend-item"><span class="legend-swatch s0"></span>起点・着地</div><div class="legend-item"><span class="legend-swatch s1"></span>増加</div><div class="legend-item"><span class="legend-swatch down"></span>減少</div></div><div class="waterfall"><div class="wf-item"><div class="wf-value">100</div><div class="wf-bar" style="height: 50%;"></div><div class="wf-label">ラベル1</div></div><div class="wf-item"><div class="wf-value">+18</div><div class="wf-bar up" style="height: 9%;"></div><div class="wf-label">ラベル2</div></div><div class="wf-item"><div class="wf-value">+24</div><div class="wf-bar up" style="height: 12%;"></div><div class="wf-label">ラベル3</div></div><div class="wf-item"><div class="wf-value">-9</div><div class="wf-bar down" style="height: 5%;"></div><div class="wf-label">ラベル4</div></div><div class="wf-item"><div class="wf-value">+7</div><div class="wf-bar up" style="height: 4%;"></div><div class="wf-label">ラベル5</div></div><div class="wf-item"><div class="wf-value">140</div><div class="wf-bar blue" style="height: 70%;"></div><div class="wf-label">ラベル6</div></div></div></div><div class="insight-panel"><div class="section-label">タイトル 2</div><div class="body-copy">Text 1</div></div></div></div>
     <footer class="footer"><span class="source">注：前提・注記を記載 出典：Source 1</span><span>8</span></footer>
   </div>
 </section>

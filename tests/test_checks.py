@@ -633,3 +633,66 @@ class PptxVideoAndExternal(unittest.TestCase):
             self.assertEqual(len(prs.slides), n_html + 1)
             xml = "".join(sl.part.blob.decode("utf8", "ignore") for sl in prs.slides)
             self.assertIn("p:videoFile", xml.replace("a:videoFile", "p:videoFile"))
+
+
+class TypeIdLeftover(unittest.TestCase):
+    """check_deck：パーツの英語の型ID（「05  chart_insight」）が残っていたら FAIL"""
+
+    def test_type_id_fails(self):
+        code, fails = run(inject("<span>3</span>", "<span>3</span><i>05  chart_insight</i>"))
+        self.assertTrue(any("型ID" in l for l in fails), fails)
+
+    def test_good_deck_has_no_type_id(self):
+        self.assertFalse(any("型ID" in l for l in run(GOOD)[1]))
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class BarAxisAndColors(LayoutFeedback20261012):
+    """check_layout：棒グラフの項目名が軸の線より上（§5.26）・下端のずれ・凡例なしの色分け（§5.5）"""
+
+    def chart(self, labels_below=True, colors=("#322014",) * 4, legend=""):
+        wrap = "position:relative;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%"
+        lab = "position:absolute;top:calc(100% + 8px);left:0;right:0;text-align:center" if labels_below else "margin-top:8px;text-align:center"
+        bars = "".join(f'<div style="{wrap}"><div>{v}</div><div style="width:70%;height:{v}%;background:{c}"></div><div style="{lab}">部門{i}</div></div>'
+                       for i, (v, c) in enumerate(zip((30, 50, 70, 90), colors)))
+        return (f'{legend}<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:20px;height:300px;'
+                f'border-bottom:2px solid #333;margin-bottom:52px">{bars}</div>')
+
+    def test_labels_above_axis_warn(self):
+        out = self.layout(self.chart(labels_below=False))
+        self.assertTrue(any("軸の線より上" in l for l in out), out)
+
+    def test_labels_below_axis_pass(self):
+        out = self.layout(self.chart())
+        self.assertFalse(any("軸の線より上" in l or "下端が" in l for l in out), out)
+
+    def test_colors_without_legend_warn(self):
+        out = self.layout(self.chart(colors=("#322014", "#C5A681", "#5A3921", "#322014")))
+        self.assertTrue(any("凡例が無い" in l for l in out), out)
+
+    def test_colors_with_legend_pass(self):
+        out = self.layout(self.chart(colors=("#322014", "#C5A681", "#5A3921", "#322014"), legend='<div class="legend">凡例</div>'))
+        self.assertFalse(any("凡例が無い" in l for l in out), out)
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class RowSlackAndHeadingSize(LayoutFeedback20261012):
+    """check_layout：表の行の間延び（§4.12）・見出しが下の文字より小さい（§6・§4.21）"""
+
+    ROWS = "".join(f'<tr><td style="padding:{{p}};line-height:{{lh}}">部門{i}</td><td style="padding:{{p}};line-height:{{lh}}">月に約{i}0件を処理する</td></tr>' for i in range(1, 4))
+
+    def test_loose_rows_warn(self):
+        out = self.layout("<table>" + self.ROWS.format(p="5mm 2mm", lh="1.7") + "</table>")
+        self.assertTrue(any("間延び" in l for l in out), out)
+
+    def test_tight_rows_pass(self):
+        out = self.layout("<table>" + self.ROWS.format(p="2.5mm 2mm", lh="1.4") + "</table>")
+        self.assertFalse(any("間延び" in l for l in out), out)
+
+    def test_small_heading_warns(self):
+        body = '<h3 style="font-size:12px">部門ごとの件数</h3><div><p style="font-size:18px">営業部は月に約120件を処理する</p></div>'
+        self.assertTrue(any("その下の文字より小さい" in l for l in self.layout(body)))
+
+    def test_big_heading_passes(self):
+        body = '<h3 style="font-size:20px">部門ごとの件数</h3><div><p style="font-size:15px">営業部は月に約120件を処理する</p><p style="font-size:30px">72%</p></div>'
+        self.assertFalse(any("その下の文字より小さい" in l for l in self.layout(body)))

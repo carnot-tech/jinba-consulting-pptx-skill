@@ -768,6 +768,16 @@ def page_number(fragment):
     return int(m.group(1)) if m else None
 
 
+TYPE_ID = re.compile(r"(?<![\w/.])\d{2}\s+[a-z]+(?:_[a-z]+)+(?![\w.])")
+
+
+def check_type_id(idx, text):
+    """パーツの英語の型ID（「05 chart_insight」など）が右上のラベルや本文に残っていないか"""
+    m = TYPE_ID.search(text)
+    if m:
+        fail(f"p{idx}: パーツの型ID「{m.group(0)}」が残っている（右上のラベルはそのページの話題を日本語で書く。§4.13）")
+
+
 def check_page_numbers(nums):
     """§4.45: 印字したページ番号は連番（表紙・章扉・裏表紙は番号を振らないので除く）"""
     got = [(i, n) for i, n in nums if n is not None]
@@ -884,7 +894,10 @@ def check_html(path):
     slide_classes = re.findall(pat.replace('class="(?:', 'class="((?:', 1).replace(')"[^>]*>', '))"[^>]*>', 1), html)
     nums, heads = [], []
     for i, s in enumerate(slides, 1):
-        check_garbled(i, re.sub(r"<[^>]+>", " ", re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", s, flags=re.S)))
+        vis = re.sub(r"<[^>]+>", " ", re.sub(r"<(script|style)[^>]*>.*?</\1>|<!--.*?-->", " ", s, flags=re.S))
+        check_garbled(i, vis)
+        if not TEMPLATE_MODE:
+            check_type_id(i, vis)
         m = re.search(r"<h1[^>]*>(.*?)</h1>", s, re.S) or re.search(r'class="[^"]*\b(?:ttl|title|msg)\b[^"]*"[^>]*>(.*?)</', s, re.S)
         raw_t = m.group(1) if m else ""
         t = re.sub(r"<[^>]+>", "", raw_t).strip()
