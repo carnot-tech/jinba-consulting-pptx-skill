@@ -1012,6 +1012,10 @@ class TitleSizeAndPdfPages(LayoutFeedback20261012):
         html = GOOD.replace("</style>", ".s.cover{height:auto;min-height:200mm;overflow:visible}</style>", 1)
         self.assertIn("PDF が", self.full(html))
 
+    def test_source_line_inside_footer_fails(self):
+        html = GOOD.replace('<div class="src">出典：架空データ（説明用）</div>', '<div class="src" style="position:absolute;left:16mm;bottom:6mm">出典：架空データ（説明用）</div>', 1)
+        self.assertIn("フッターと本文が重なる", self.full(html))
+
     def test_good_deck_passes(self):
         out = self.full(GOOD)
         self.assertNotIn("タイトルの大きさが既定の22pt", out)

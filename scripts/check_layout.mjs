@@ -805,7 +805,7 @@ const { issues, warns } = await page.evaluate(() => {
       if (r.height === 0 || r.width === 0) continue;
       // 葉要素だけ見る（コンテナの巨大rectでの誤検出を避ける）
       if (el.children.length > 0 && el.tagName !== "IMG") continue;
-      if (fr && r.bottom > fr.top + 1 && r.top < fr.top) {
+      if (fr && r.bottom > fr.top + 1 && r.top < fr.bottom - 1) { // フッターの上端をまたぐものに加え、フッターの中に入り込んだもの（押し出された出典行など）も
         out.push(`p${n}: フッターと本文が重なる: <${el.tagName.toLowerCase()}> 「${(el.textContent || "").trim().slice(0, 30)}」`);
       }
       if (r.right > sr.right + 1) {
