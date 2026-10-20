@@ -603,7 +603,8 @@ body {
 
 .matrix-chart {
   position: relative;
-  height: 400px;
+  height: 380px;
+  margin: 30px 0 34px; /* 軸の名前を軸の線の外に出す場所 */
   border-left: 2px solid var(--ink);
   border-bottom: 2px solid var(--ink);
   background:
@@ -620,13 +621,13 @@ body {
 }
 
 .matrix-axis-x {
-  right: 10px;
-  bottom: 10px;
+  right: 0;
+  bottom: -30px; /* 横軸の名前は軸の線の下に右揃え（図の中に浮かせない） */
 }
 
 .matrix-axis-y {
-  left: 10px;
-  top: 10px;
+  left: 0;
+  top: -28px; /* 縦軸の名前は軸の線の上に左揃え */
 }
 
 .matrix-item {
@@ -644,7 +645,7 @@ body {
 
 .matrix-item.priority {
   background: var(--navy);
-  color: #fff;
+  color: #fff; /* 塗り以外（大きさ・太さ・幅）は他の候補と同じ。塗りの意味は凡例で示す */
 }
 
 .issue-tree {
@@ -1710,8 +1711,8 @@ body {
 .stack-chart {
   display: flex;
   align-items: flex-end;
-  justify-content: space-around;
-  gap: 46px;
+  justify-content: center; /* 棒を中央に寄せ、棒どうしを離しすぎない */
+  gap: 72px;
   height: 360px;
   padding-top: 10px;
 }
@@ -3223,7 +3224,7 @@ body.external section.internal{display:none!important}
     <div class="kicker">15  matrix_2x2</div>
     <h1 class="title">2×2マトリクス</h1>
     <div class="rule"></div>
-    <div class="content"><div class="matrix-wrap"><div class="matrix-chart"><div class="matrix-axis-y">縦軸名（上ほど高い）</div><div class="matrix-axis-x">横軸名（右ほど高い）</div><div class="matrix-item priority" style="left: 72%; top: 24%;">施策1</div><div class="matrix-item priority" style="left: 68%; top: 42%;">施策2</div><div class="matrix-item" style="left: 35%; top: 31%;">施策3</div><div class="matrix-item" style="left: 46%; top: 62%;">施策4</div><div class="matrix-item" style="left: 23%; top: 74%;">施策5</div></div><div class="insight-panel"><div class="section-label">タイトル 2</div><ul class="bullets"><li>Text 1</li><li>Text 2</li></ul></div></div></div>
+    <div class="content"><div class="matrix-wrap"><div><div class="stack-legend"><div class="legend-item"><span class="legend-swatch s0"></span>選んだ候補</div><div class="legend-item"><span class="legend-swatch"></span>そのほかの候補</div></div><div class="matrix-chart"><div class="matrix-axis-y">縦軸名（上ほど高い）</div><div class="matrix-axis-x">横軸名（右ほど高い）</div><div class="matrix-item priority" style="left: 72%; top: 24%;">施策1</div><div class="matrix-item priority" style="left: 68%; top: 42%;">施策2</div><div class="matrix-item" style="left: 35%; top: 31%;">施策3</div><div class="matrix-item" style="left: 46%; top: 62%;">施策4</div><div class="matrix-item" style="left: 23%; top: 74%;">施策5</div></div></div><div class="insight-panel"><div class="section-label">タイトル 2</div><ul class="bullets"><li>Text 1</li><li>Text 2</li></ul></div></div></div>
     <footer class="footer"><span class="source">出典：Source 1</span><span>16</span></footer>
   </div>
 </section>

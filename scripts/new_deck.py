@@ -216,7 +216,7 @@ def main():
             kick = re.sub(r"<[^>]+>", "", km.group(1)).strip() if km else ""
             # 見本の型ID（「05  chart_insight」）は、基本パーツ集の見本（「パーツ09｜軸のある表」）と同じ伏せ字の形にする。
             # 書き換え忘れは check_deck が伏せ字として FAIL にする（右上のラベルは、そのページの話題を日本語で書く）
-            tm = re.match(r"^(\d{2})\s+([a-z_]+)$", kick)
+            tm = re.match(r"^(\d{2})\s+([a-z][a-z0-9_]*)$", kick)
             if tm:
                 kick = f"パーツ{tm.group(1)}｜{tm.group(2)}"
             bar = f'<div class="hdr"><div class="logo">{a.title}</div><div class="date">{kick}</div></div>'
