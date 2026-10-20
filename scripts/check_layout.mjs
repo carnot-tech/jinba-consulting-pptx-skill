@@ -15,7 +15,7 @@
 //  13. 表の行を縦に引き伸ばしている（行の高さが中身より1.5行ぶん以上高い表は FAIL、1行ぶん以上は WARN。§4.12）
 //  14. 凡例がグラフより下に置かれている（WARN。§5.18: 凡例はグラフの見出しの上に右揃えで置く）
 //  15. 左右2列に並べたとき、列の最初の横罫（見出しの下罫・表の上罫）の高さがずれている（WARN。§4.21）
-//  16. 塗り・枠のある大きな箱の中が半分以上空いている（WARN。§4.54: 箱で囲っても空きは空き）
+//  16. 塗り・枠のある大きな箱、縦の線で区切った列の中が半分以上空いている（WARN。§4.54・§4.12）。中身を上下に離して真ん中が30%超空く（WARN）・45%超（FAIL）
 //  17. 文字が箱・セルの外にはみ出している（FAIL）
 //  18. 同じ作りの本文の文字が違う大きさ・文の途中の太字が3か所以上（WARN。§4.19・§5.5）
 //  19. 棒グラフ: 項目名が軸の線より上にある（棒が線から浮いている）・凡例なしで棒の色が分かれている（WARN。§5.26・§5.5）
@@ -26,6 +26,7 @@
 //  24. 行のリスト（罫線で区切った行の並び）の間延び・左右2列の行の位置のずれ（WARN。§4.12・§4.51）
 //  25. 並べた見出し・大きな数字のうち、一部だけが2行に折れている（WARN。§4.51・§2.13）
 //  26. 表の列の区切り線・行の軸の縦線が、見出しの行まで伸びて見出しの下罫より上に出ている（WARN。§6）
+//  27. 並べた項目（箇条書き・同じ種類の縦の並び）の間が、余白・gap の決まりより文字の1.5倍超（WARN）・3倍超（FAIL）余分に空いている間延び（§4.12）
 //   4 の補足: 版面の30%超が空いているときは WARN（40%超は FAIL）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
 // 使い方: node scripts/check_layout.mjs deck.html   （playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
@@ -136,7 +137,7 @@ const { issues, warns } = await page.evaluate(() => {
       const span = contentBottom > contentTop ? contentBottom - contentTop : 0;
       const empty = area > 0 ? 1 - span / area : 0;
       if (empty > 0.4) {
-        out.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（40%超。直し方は、文字を一段大きくする・配置を変える（右に意味合いの列を置く等）・前後のページと統合する。空きを埋めるために数字・事例・行を足さない。材料の無い内容を足すくらいなら、空いたまま残して理由を書く — §5.13）`);
+        out.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（40%超。直し方は、文字を一段大きくする・配置を変える（右に意味合いの列を置く等）・前後のページと統合する。空きを埋めるために数字・事例・行を足さない。項目の間や列の高さを広げて埋めない — §4.12・§5.13）`);
       } else if (empty > 0.3) {
         warnOut.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（30%超。「下が空きすぎ」と差し戻されやすい。文字を一段大きくする・配置を変える。空きを埋めるために中身を足さない — §5.13）`);
       }
@@ -270,12 +271,15 @@ const { issues, warns } = await page.evaluate(() => {
         }
       }
     }
-    // 9. 罫線の太さを役割（要素名＋クラス＋辺）ごとに集める
+    // 9. 罫線の太さを役割（要素名＋クラス＋辺）ごとに集める（背景と同じ色の線は区切りの余白なので数えない）
+    const slideBg = getComputedStyle(s).backgroundColor;
     for (const el of std ? [] : s.querySelectorAll("*")) {
       const st = getComputedStyle(el);
       for (const side of ["Top", "Bottom", "Left", "Right"]) {
         const w = parseFloat(st[`border${side}Width`]);
         if (!(w > 0) || st[`border${side}Style`] === "none") continue;
+        const bc = st[`border${side}Color`];
+        if (bc === slideBg || bc === "rgb(255, 255, 255)" || /rgba\([^)]*,\s*0\)$/.test(bc)) continue;
         const scale = el.offsetWidth ? el.getBoundingClientRect().width / el.offsetWidth : 1;
         const key = `${el.tagName.toLowerCase()}${el.classList.length ? "." + [...el.classList].sort().join(".") : ""}:${side.toLowerCase()}`;
         (borders[key] ||= new Map()).set(Math.round(w * scale * 2) / 2, n);
@@ -364,18 +368,30 @@ const { issues, warns } = await page.evaluate(() => {
         for (const b of s.querySelectorAll("div, aside, li")) {
           if (b === s || b.closest("table, svg, .foot, .footer, footer, .src, .bar, .legend")) continue;
           const st = getComputedStyle(b);
-          if (!isBoxed(st)) continue;
+          // 縦の線で区切った列（ロードマップの段など）: 左右どちらかの線だけを持ち、同じ種類の列が2本以上並ぶもの
+          const sideOnly = (x) => { const t = getComputedStyle(x); const lr = ["Left", "Right"].some((k) => parseFloat(t[`border${k}Width`]) >= 1 && t[`border${k}Style`] !== "none"); const tb2 = ["Top", "Bottom"].some((k) => parseFloat(t[`border${k}Width`]) >= 1 && t[`border${k}Style`] !== "none"); return lr && !tb2 && !isFilled(t); };
+          const sideRuled = !isBoxed(st) && sideOnly(b) && [...(b.parentElement?.children || [])].filter((x) => x.className === b.className).length >= 2;
+          if (!isBoxed(st) && !sideRuled) continue;
           const br = b.getBoundingClientRect();
-          if (br.height < area * 0.3 || br.width < sr.width * 0.15) continue;
+          if (br.height < area * 0.3 || br.width < sr.width * (isBoxed(st) ? 0.15 : 0.1)) continue;
           const padT = parseFloat(st.paddingTop) || 0, padB = parseFloat(st.paddingBottom) || 0;
           let top = Infinity, bot = -Infinity;
+          const spans = [];
           for (const el of [b, ...b.querySelectorAll("*")]) {
             const rs = /^(svg|img|canvas|video)$/i.test(el.tagName) ? [el.getBoundingClientRect()]
               : el !== b && isBoxed(getComputedStyle(el)) ? [el.getBoundingClientRect()] : ownTextRects(el);
-            for (const r of rs) { if (r.height > 0) { top = Math.min(top, r.top); bot = Math.max(bot, r.bottom); } }
+            for (const r of rs) { if (r.height > 0) { top = Math.min(top, r.top); bot = Math.max(bot, r.bottom); spans.push([r.top, r.bottom]); } }
           }
           const inner = br.height - padT - padB;
           if (!(bot > top) || inner <= 0) continue;
+          // 箱の中の真ん中の空き（上と下に中身を離して置き、間が空いている）
+          spans.sort((x, y) => x[0] - y[0]);
+          let reach = -Infinity, midGap = 0;
+          for (const [t2, b2] of spans) { if (reach > -Infinity) midGap = Math.max(midGap, t2 - reach); reach = Math.max(reach, b2); }
+          if (midGap / inner > 0.3) {
+            (midGap / inner > 0.45 ? out : warnOut).push(`p${n}: 箱・列の中の真ん中が ${Math.round(midGap / inner * 100)}% 空いている「${(b.textContent || "").trim().slice(0, 16)}」（§4.12・§4.54: 中身を上と下に離して置かない。箱を中身の高さにして詰める。margin-top:auto・height:100%・space-between で離さない）`);
+            break;
+          }
           const emptyIn = 1 - (bot - top) / inner;
           // 高さを揃えた並列の箱（§4.51）は、短い側が空くのが当然。並びの中でいちばん中身の多い箱も空いているときだけ拾う
           const sibs = [...(b.parentElement?.children || [])].filter((x) => x !== b && x.tagName === b.tagName && x.className === b.className);
@@ -386,7 +402,9 @@ const { issues, warns } = await page.evaluate(() => {
             return b2 > t2 ? Math.min(m, 1 - (b2 - t2) / Math.max(1, xr.height)) : m;
           }, emptyIn);
           if (emptyIn > 0.5 && fullest > 0.5) {
-            warnOut.push(`p${n}: 箱の中が ${Math.round(emptyIn * 100)}% 空いている「${(b.textContent || "").trim().slice(0, 16)}」（§4.54: 箱で囲っても空きは空き。箱を中身の高さにする・中身を足す・文字を一段大きくする）`);
+            warnOut.push(isBoxed(st)
+              ? `p${n}: 箱の中が ${Math.round(emptyIn * 100)}% 空いている「${(b.textContent || "").trim().slice(0, 16)}」（§4.54: 箱で囲っても空きは空き。箱を中身の高さにする・中身を足す・文字を一段大きくする）`
+              : `p${n}: 縦の線で区切った列が伸び、中が ${Math.round(emptyIn * 100)}% 空いている「${(b.textContent || "").trim().slice(0, 16)}」（§4.12: 列は中身の高さにする。height:100%・stretch で伸ばさない）`);
             break;
           }
         }
@@ -643,6 +661,45 @@ const { issues, warns } = await page.evaluate(() => {
           return left || right;
         });
         if (bad) { warnOut.push(`p${n}: 表の縦の線が見出しの行まで伸び、見出しの下罫より上に出ている「${(bad.textContent || "").trim().slice(0, 12)}」（行の軸の線・区切り線は本文の行にだけ引く — §6）`); break; }
+      }
+      // 27. 並べた項目の間を空けて版面を埋める間延び（箇条書き・縦に並べた同じ種類の項目。§4.12）
+      {
+        const textBox = (el) => {
+          let t = Infinity, b = -Infinity;
+          for (const x of [el, ...el.querySelectorAll("*")]) for (const r of ownTextRects(x)) { t = Math.min(t, r.top); b = Math.max(b, r.bottom); }
+          return b > t ? { t, b } : null;
+        };
+        let worst = null;
+        for (const box of s.querySelectorAll("ul, ol, div")) {
+          if (box.closest("table, svg, .foot, .footer, footer, .src, .bar, .legend, h1, .title, .ttl")) continue;
+          if (/tree/.test(box.className) || box.closest("[class*='tree']")) continue; // ツリーは枝の間が子の数に合わせて開くのが自然
+          const kids = [...box.children].filter((k) => { const st = getComputedStyle(k); return st.display !== "none" && st.visibility !== "hidden" && st.position !== "absolute" && (k.textContent || "").trim(); });
+          if (kids.length < 2 || kids.some((k) => k.tagName !== kids[0].tagName || k.className !== kids[0].className)) continue;
+          const tb = kids.map(textBox);
+          if (tb.some((x) => !x)) continue;
+          // 項目の上下の余白・罫線・margin と、並びの gap で決めた間隔を差し引いた「余分な空き」を測る
+          const px = (st, k) => parseFloat(st[k]) || 0;
+          const rowGap = px(getComputedStyle(box), "rowGap");
+          const gaps = [];
+          let stacked = true;
+          for (let k = 0; k + 1 < tb.length; k++) {
+            if (tb[k + 1].t < tb[k].b - 2) { stacked = false; break; }
+            const a = getComputedStyle(kids[k]), c = getComputedStyle(kids[k + 1]);
+            const fixed = px(a, "paddingBottom") + px(a, "borderBottomWidth") + px(a, "marginBottom")
+              + px(c, "marginTop") + px(c, "borderTopWidth") + px(c, "paddingTop") + rowGap;
+            gaps.push(tb[k + 1].t - tb[k].b - fixed);
+          }
+          if (!stacked) continue;
+          gaps.sort((a, b) => a - b);
+          const med = gaps[Math.floor(gaps.length / 2)];
+          const fs = effSize(kids[0]) || 12;
+          const ratio = med / fs;
+          if (ratio > 1.5 && (!worst || ratio > worst.ratio)) worst = { ratio, el: kids[0] };
+        }
+        if (worst) {
+          const msg = `p${n}: 並べた項目の間が、余白の決まりより文字の約${Math.round(worst.ratio)}倍ぶん余分に空いている「${(worst.el.textContent || "").trim().slice(0, 14)}」（§4.12: 項目の間を広げて版面を埋めない＝間延び。項目は詰めて並べ、空くなら文字を一段大きくする・形を変える・前後のページとまとめる。部品の CSS に height:100%・flex:1・space-around などを足して伸ばさない）`;
+          (worst.ratio > 3 ? out : warnOut).push(msg);
+        }
       }
       // 11. 片側だけの空き：タイトルの横幅を基準に、本文の文字・図形が占める横の範囲の外側を測る
       const ttl2 = s.querySelector("h1, .title, .ttl");

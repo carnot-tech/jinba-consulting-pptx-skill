@@ -903,6 +903,44 @@ class PartVariant(unittest.TestCase):
 
 
 @unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class SpreadItems(LayoutFeedback20261012):
+    """check_layout：項目の間を広げて版面を埋める間延び（FAIL）と、縦の線の列が伸びて中が空く（WARN）（§4.12）"""
+
+    def ul(self, spread):
+        st = "height:120mm;display:flex;flex-direction:column;justify-content:space-around" if spread else ""
+        return f'<ul style="{st};font-size:11pt">' + "".join(f"<li>項目{i}の説明を一文で書く</li>" for i in range(1, 4)) + "</ul>"
+
+    def test_spread_list_fails(self):
+        self.assertTrue(any("並べた項目の間" in l and l.startswith("FAIL") for l in self.layout(self.ul(True))))
+
+    def test_compact_list_passes(self):
+        self.assertFalse(any("並べた項目の間" in l for l in self.layout(self.ul(False))))
+
+    def cols(self, stretch):
+        h = "height:110mm;" if stretch else ""
+        col = '<div class="ph" style="{h}border-right:1px solid #ccc;padding:3mm"><b>時期{i}</b><div>中身{i}を書く</div></div>'
+        return '<div style="display:grid;grid-template-columns:repeat(4,1fr)">' + "".join(col.format(h=h, i=i) for i in range(1, 5)) + "</div>"
+
+    def test_stretched_columns_warn(self):
+        self.assertTrue(any("縦の線で区切った列が伸び" in l for l in self.layout(self.cols(True))))
+
+    def test_content_height_columns_pass(self):
+        self.assertFalse(any("縦の線で区切った列が伸び" in l for l in self.layout(self.cols(False))))
+
+    def cards(self, split):
+        st = "height:110mm;display:flex;flex-direction:column;" if split else ""
+        ul = '<ul style="margin-top:auto">' if split else "<ul>"
+        card = f'<div class="cd" style="{st}background:#eee;padding:4mm"><b>柱{{i}}の名前</b><div>柱{{i}}の中身を一文で書く</div>{ul}<li>対象{{i}}</li><li>時期{{i}}</li></ul></div>'
+        return '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5mm">' + "".join(card.format(i=i) for i in range(1, 4)) + "</div>"
+
+    def test_split_card_fails(self):
+        self.assertTrue(any("真ん中が" in l and l.startswith("FAIL") for l in self.layout(self.cards(True))))
+
+    def test_compact_card_passes(self):
+        self.assertFalse(any("真ん中が" in l for l in self.layout(self.cards(False))))
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
 class DividerAboveHeader(LayoutFeedback20261012):
     """check_layout：表の列の区切り線・行の軸の縦線が見出しの行まで伸びている（WARN。§6）"""
 
