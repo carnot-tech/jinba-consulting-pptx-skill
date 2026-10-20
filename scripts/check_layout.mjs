@@ -263,7 +263,7 @@ const { issues, warns } = await page.evaluate(() => {
         const small = Math.min(A.r.width * A.r.height, B.r.width * B.r.height);
         if (ix * iy > small * 0.2) {
           hit++;
-          warnOut.push(`p${n}: 文字が重なっている「${(A.el.textContent || "").trim().slice(0, 14)}」と「${(B.el.textContent || "").trim().slice(0, 14)}」（意図した重なりでも読めるかを確かめる）`);
+          warnOut.push(`p${n}: 文字が重なっている「${(A.el.textContent || "").trim().slice(0, 14)}」と「${(B.el.textContent || "").trim().slice(0, 14)}」（重ならない位置に動かす。意図した重ね（図の上の注記など）でも、文字が読めることを画像で確かめて qa.md に書く）`);
         }
       }
     }
@@ -314,7 +314,7 @@ const { issues, warns } = await page.evaluate(() => {
           if (t1 - t0 > 3) what.push(`上端のずれ ${Math.round(t1 - t0)}px`);
           if (what.length) {
             alignHits++;
-            warnOut.push(`p${n}: 並べた要素（${side.length}個）の${what.join("・")}が揃っていない（§4.51: 対比の列・同格の箱は 1fr で同じ幅・高さに組む。意図した差なら無視してよい）`);
+            warnOut.push(`p${n}: 並べた要素（${side.length}個）の${what.join("・")}が揃っていない（§4.51: 対比の列・同格の箱は 1fr で同じ幅・高さに組む。中身の量の違いは揃えない理由にならない。残すのは役割の違う列（見出しの細い列＋本文など）のときだけで、その理由を qa.md に書く）`);
             break;
           }
         }
@@ -684,7 +684,7 @@ const { issues, warns } = await page.evaluate(() => {
     if (mt && x.title && Math.abs(x.title / mt - 1) > 0.04)
       out.push(`p${x.n}: タイトルの実際の大きさが他のページの ${Math.round((x.title / mt) * 100)}%（パーツ集の混在で縮小がかかっていない可能性。§4・追加パーツ集は .slide の zoom ごと持ち込む）`);
     if (mb && x.body && Math.abs(x.body / mb - 1) > 0.15)
-      warnOut.push(`p${x.n}: 本文の実際の大きさが他のページの ${Math.round((x.body / mb) * 100)}%（意図した強調でなければ揃える）`);
+      warnOut.push(`p${x.n}: 本文の実際の大きさが他のページの ${Math.round((x.body / mb) * 100)}%（揃える。強調なら、強調する理由を qa.md に書く）`);
   }
   // 9. 同じ役割の罫線が、ページによって違う太さで描かれている
   for (const [key, m] of Object.entries(borders)) {

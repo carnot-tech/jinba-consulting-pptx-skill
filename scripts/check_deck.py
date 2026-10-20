@@ -328,7 +328,7 @@ def check_shape_runs(shapes):
             run.append(i)
             continue
         if len(run) >= 3:
-            warn(f"p{run[0]}〜p{run[-1]}: {shapes[run[0]-1]}のページが{len(run)}枚続く（§4.96: 比較・流れ・因果・位置づけのどれを見せるかを問い直す。意図した連番なら無視してよい）")
+            warn(f"p{run[0]}〜p{run[-1]}: {shapes[run[0]-1]}のページが{len(run)}枚続く（§4.96: 比較・流れ・因果・位置づけのどれを見せるかを問い直し、形を変える。同じ型の比較を続けて見せるのが目的のときだけ残し、理由を qa.md に書く）")
         run = [i] if sh else []
 
 
