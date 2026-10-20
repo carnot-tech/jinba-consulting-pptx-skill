@@ -791,7 +791,7 @@ class LayoutFeedback20261020(LayoutFeedback20261012):
 
 
 class MetaTitle(unittest.TestCase):
-    """check_deck：作業の説明のタイトル（「〜を3つに分ける」）を WARN"""
+    """check_deck：作業の説明のタイトル（「〜を3つに分ける」「〜を示す」は WARN、「〜を整理する」「〜をまとめる」で終わると FAIL）"""
 
     def test_meta_title_warns(self):
         html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "承認が遅れる理由を3つに分ける")
@@ -799,6 +799,14 @@ class MetaTitle(unittest.TestCase):
 
     def test_claim_title_passes(self):
         self.assertFalse(any("作業の説明" in l for l in warns(GOOD)))
+
+    def test_seiri_ending_fails(self):
+        html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "打ち手ごとに担当・時期・効果を整理する")
+        self.assertTrue(any("作業の説明で終わっている" in l for l in run(html)[1]))
+
+    def test_shimesu_ending_warns(self):
+        html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "承認待ちの日数の推移を示す")
+        self.assertTrue(any("作業の説明で終わっている" in l for l in warns(html)))
 
 
 class CoverPlaceholder(unittest.TestCase):
