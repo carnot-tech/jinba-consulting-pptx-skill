@@ -42,6 +42,18 @@ def inject(old, new):
     return GOOD.replace(old, new, 1)
 
 
+def run_files(html, files, *extra):
+    """files: {名前: 中身} を一時フォルダに置いてから検査する。extra の @名前 はその置き場所に読み替える"""
+    with tempfile.TemporaryDirectory() as d:
+        for name, body in files.items():
+            (Path(d) / name).write_text(body, encoding="utf8")
+        p = Path(d) / "deck.html"
+        p.write_text(html, encoding="utf8")
+        extra = [str(Path(d) / a[1:]) if a.startswith("@") else a for a in extra]
+        r = subprocess.run([sys.executable, str(CHECK), str(p), *extra], capture_output=True, text=True)
+    return r.returncode, [l for l in r.stdout.splitlines() if l.startswith("FAIL")]
+
+
 class GoodDeck(unittest.TestCase):
     def test_good_deck_passes(self):
         code, fails = run(GOOD)
@@ -225,6 +237,41 @@ class EmptyArea(unittest.TestCase):
         code, out = self.layout(html)
         self.assertEqual(code, 1, out)
         self.assertIn("p3: 版面の", out)
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class FillMeaning(unittest.TestCase):
+    """§5.2 表の塗りには同じ色の凡例チップ／§6 表の見出しは塗らない"""
+    ROW = '<tr><td class="ax">試行</td><td>2か月</td><td>営業部</td>'
+    HEAD = '<th class="ax" style="width:52mm">段階</th>'
+    SRC = '<div class="src">出典：架空データ（説明用）</div>\n  </div>\n  <div class="foot"><b>業務自動化の検討</b><span>4</span></div>'
+
+    def layout(self, html):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "deck.html"
+            p.write_text(html, encoding="utf8")
+            r = subprocess.run(["node", str(ROOT / "scripts" / "check_layout.mjs"), str(p)],
+                               capture_output=True, text=True, cwd=ROOT)
+        return r.returncode, r.stdout
+
+    def painted(self):
+        return inject(self.ROW, '<tr><td class="ax">試行</td><td style="background:#e8dcc8">2か月</td><td style="background:#e8dcc8">営業部</td>')
+
+    def test_fill_without_legend_warns(self):
+        code, out = self.layout(self.painted())
+        self.assertIn("凡例チップがない", out)
+
+    def test_fill_with_legend_passes(self):
+        html = self.painted()
+        chip = '<span style="display:inline-block;width:10px;height:10px;background:#e8dcc8"></span> 試行の対象'
+        html = html.replace("<h1>1部門で2か月試行し、効果を確かめてから全社へ広げる</h1>",
+                            "<h1>1部門で2か月試行し、効果を確かめてから全社へ広げる</h1><div class=\"legend\">" + chip + "</div>", 1)
+        code, out = self.layout(html)
+        self.assertNotIn("凡例チップがない", out)
+
+    def test_header_fill_warns(self):
+        code, out = self.layout(inject(self.HEAD, '<th class="ax" style="width:52mm;background:#e8dcc8">段階</th>'))
+        self.assertIn("表の見出しに塗り", out)
 
 
 if __name__ == "__main__":
@@ -633,3 +680,49 @@ class PptxVideoAndExternal(unittest.TestCase):
             self.assertEqual(len(prs.slides), n_html + 1)
             xml = "".join(sl.part.blob.decode("utf8", "ignore") for sl in prs.slides)
             self.assertIn("p:videoFile", xml.replace("a:videoFile", "p:videoFile"))
+
+
+class AxisNameInHeaderBand(unittest.TestCase):
+    # §4.102: 見出し行の左端セルを空欄にしない
+    def test_empty_header_corner_fires(self):
+        code, fails = run(inject('<th class="ax" style="width:52mm">段階</th>', '<th class="ax" style="width:52mm"></th>'))
+        self.assertEqual(code, 1)
+        self.assertTrue(any("§4.102" in f for f in fails), fails)
+
+    def test_named_header_corner_passes(self):
+        code, fails = run(GOOD)
+        self.assertFalse(any("§4.102" in f for f in fails), fails)
+
+
+class AppendixDivider(unittest.TestCase):
+    # §4.100: 本編と付録の間に区切りのスライドを挟む
+    APPX = '<section class="s"><div class="tag">付録</div><h1>付録：試行した営業部では、承認待ちの平均が3日から当日に縮んだ</h1><p>営業部は平均3日から当日に縮んだ</p><div class="foot"><b>業務自動化の検討</b><span>5</span></div></section>\n'
+    DIV = '<section class="s"><h1>Appendix</h1><p>部門別の数字</p></section>\n'
+    def _deck(self, extra):
+        # 裏表紙（最後の cover）の手前に差し込む
+        head, sep, tail = GOOD.rpartition('<section class="s cover">')
+        return head + extra + sep + tail
+
+    def test_appendix_without_divider_fires(self):
+        code, fails = run(self._deck(self.APPX))
+        self.assertTrue(any("§4.100" in f for f in fails), fails)
+
+    def test_appendix_with_divider_passes(self):
+        code, fails = run(self._deck(self.DIV + self.APPX))
+        self.assertFalse(any("§4.100" in f for f in fails), fails)
+
+
+class OldColors(unittest.TestCase):
+    # 自社のレガシー色は本体に書かず、local/old-colors.txt か --old-colors で渡す
+    def test_listed_color_fires(self):
+        code, fails = run_files(GOOD, {"old.colors": "# 旧ブランド色\n#8A8F94\n"}, "--old-colors", "@old.colors")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("8A8F94" in f for f in fails), fails)
+
+    def test_brand_none_skips(self):
+        code, fails = run_files(GOOD, {"old.colors": "8A8F94\n"}, "--old-colors", "@old.colors", "--brand", "none")
+        self.assertFalse(any("禁止色" in f for f in fails), fails)
+
+    def test_no_list_no_check(self):
+        code, fails = run(GOOD)
+        self.assertFalse(any("禁止色" in f for f in fails), fails)
