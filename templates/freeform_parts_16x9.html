@@ -77,13 +77,15 @@ tr:last-child td{border-bottom:0}
 td.ax{font-size:12.5pt;line-height:1.35;font-weight:700;color:var(--accent);font-family:var(--font-serif);border-right:1.8px solid var(--navy)} /* 行見出しは列の見出し（14.5pt）より小さく、本文（11.5pt）より大きく（§6） */
 th.ax{border-right:1.8px solid var(--navy)}
 /* 軸ボックスの表（b09:axb）: 行の軸を左の塗りの箱で示す（slide-rules §6「塗りの軸ボックス」） */
-table.axb{border-collapse:separate;border-spacing:5mm 0;width:calc(100% + 10mm);margin-left:-5mm;margin-right:-5mm} /* 列の間の空きの分だけ外へ広げ、左端をタイトルと揃える */
+table.axb{border-collapse:separate;border-spacing:5mm 0;width:calc(100% + 10mm)}
+.c>table.axb,.side .sb>table.axb,.two>div>table.axb,table.axb{margin-left:-5mm;margin-right:-5mm} /* 列の間の空きの分だけ外へ広げ、左端をタイトルと揃える（上下中央の margin:auto 0 より強く） */
 table.axb th{border-bottom:1.8px solid var(--navy)}
 table.axb th.ax{border-bottom:0;border-right:0;color:transparent} /* 箱が軸を示すので、箱の列に見出しを置かない。下罫は箱の列の右から */
 table.axb td{border-bottom:1px solid var(--rule)} /* 行の線は列ごとに切れる（縦の区切りの位置で切る） */
 table.axb td.ax{background:var(--navy);color:#fff;border-right:0;border-bottom:1.5mm solid var(--slide-bg);font-size:12.5pt;padding:3mm 4mm} /* 箱の下に横線を通さない */
-table.axb tr:last-child td.ax{border-bottom:0}
-table.axb td:not(.ax)+td,table.axb th:not(.ax)+th{border-left:1px dotted var(--rule);padding-left:4mm} /* 縦の区切りは点線 */
+table.axb tr:last-child td{border-bottom:0} /* 最終行の下に線を引かない */
+table.axb td:not(.ax)+td{border-left:1px dotted var(--rule);padding-left:4mm} /* 縦の区切りは点線。本文の行にだけ引き、見出しの下罫より上に出さない */
+table.axb th:not(.ax)+th{padding-left:4mm}
 /* 表は中身の高さのまま上下中央に置く。容器ごと中央寄せすると出典(.src)まで持ち上がるので、表自身の上下 margin:auto で寄せる（§4.12・§4.47） */
 .c>table{flex:0 0 auto;height:auto;margin:auto 0}
 /* 列の内容が同種（時点・案など）なら等幅にする。最後の列だけに余白を吸わせて右側を空けない（§4.12） */

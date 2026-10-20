@@ -896,3 +896,20 @@ class PartVariant(unittest.TestCase):
     def test_unknown_variant_fails(self):
         r = subprocess.run([sys.executable, str(ROOT / "scripts" / "new_deck.py"), "--show", "b09:zzz"], capture_output=True, text=True)
         self.assertNotEqual(r.returncode, 0)
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class DividerAboveHeader(LayoutFeedback20261012):
+    """check_layout：表の列の区切り線が見出しの行まで伸びている（WARN。§6）"""
+
+    def table(self, head_divider):
+        th = "border-bottom:2px solid #333;" + ("border-left:1px dotted #999;" if head_divider else "")
+        rows = "".join(f'<tr><td>部門{i}</td><td style="border-left:1px dotted #999">月に約{i}0件</td><td style="border-left:1px dotted #999">担当{i}名</td></tr>' for i in range(1, 4))
+        return (f'<table style="border-collapse:collapse"><tr><th style="border-bottom:2px solid #333">部門</th><th style="{th}">件数</th>'
+                f'<th style="{th}">担当</th></tr>{rows}</table><div style="height:250px;border:1px solid #333">図</div>')
+
+    def test_divider_in_header_warns(self):
+        self.assertTrue(any("区切り線が見出しの行まで" in l for l in self.layout(self.table(True))))
+
+    def test_divider_only_in_body_passes(self):
+        self.assertFalse(any("区切り線が見出しの行まで" in l for l in self.layout(self.table(False))))
