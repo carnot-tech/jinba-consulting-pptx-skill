@@ -13,7 +13,9 @@ new_deck.py — 2つのパーツ集から必要なパーツだけを取り出し
 スコープして結合する。両方のトークン（:root）は同じ値なので、配色・書体は自動で揃う。
 ページ番号（フッター）は並び順で振り直す。表紙（b01）・章扉（b04）・裏表紙（b10）は番号を振らない。
 
-  --list   パーツ番号と型名の一覧を表示して終了
+  --list   よく使う部品（規約を満たすことを確かめた20種類）の番号・型名・使いどころを表示して終了
+  --all    --list と一緒に付けると、残りの型も含めた62型すべてを表示する
+  --show b09,m05   指定した部品の HTML（section だけ）を表示して終了。パーツ集の原本は開かない
 """
 import argparse, pathlib, re, sys, unicodedata
 
@@ -118,20 +120,66 @@ def part_names(html, cls):
     return names
 
 
+# よく使う部品。規約（slide-rules.md）と機械チェックを満たすことを確かめた20種類。
+# 見せ方はまずここから選ぶ。合わなければ --all の型を見るか、規約の範囲で自由に組む。
+CORE = [
+    ("b01", "表紙", "資料名・日付・作成者"),
+    ("m01", "エグゼクティブサマリー", "冒頭で結論と論点を一望させる。各行に P.n 参照"),
+    ("b02", "全体マップ", "論点と該当ページの対応を1枚で示す（サマリーと重ねない）"),
+    ("b27", "章扉（アジェンダ再掲）", "本文11枚以上で章を区切る。現在の章だけ強調"),
+    ("b06", "前提→帰結の2カラム", "左に事実・表、右に「だから何が起きるか」。強い因果に三角"),
+    ("b07", "大型数値の表＋読み取り", "数値を行に並べ、右に読み取り"),
+    ("b09", "軸のある表", "行＝項目・列＝観点で比べる。カードの羅列の代わり"),
+    ("b11", "主張パネル＋図", "左の濃色パネルに論点番号と主張、右に図表（章の各論）"),
+    ("b26", "課題と打ち手の2カラム", "課題と打ち手を行で対応させる"),
+    ("m05", "単一チャート＋含意", "1つの棒グラフで事実を示し、右に意味合い（項目比較・時系列）"),
+    ("m06", "積み上げ棒", "内訳・構成の比較（全体の中の一部を見せる）"),
+    ("m07", "寄与度ブリッジ", "増減の要因を起点→着地で示す"),
+    ("m10", "選択肢の比較表", "複数案を評価軸で比べる"),
+    ("m15", "2×2マトリクス", "2つの物差しで候補を位置づけ、選ぶ（軸の名前と両端を書く）"),
+    ("m20", "提言の柱", "打ち手を3本前後の柱で示す"),
+    ("m25", "イシューツリー", "問いを答えを決める要素に分解する"),
+    ("m28", "プロセスの段階", "手順・段階を横に並べる"),
+    ("m33", "ロードマップ", "時期ごとの実行計画"),
+    ("m35", "意思決定ページ", "決めてほしいことと推奨を示す"),
+    ("b10", "裏表紙", "締め（出典行に制作クレジット1行）"),
+]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--parts", help="例: b01,b02,m05,b09,b10")
     ap.add_argument("--title", default="資料名")
     ap.add_argument("-o", "--out", default="mydeck.html")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--all", action="store_true")
+    ap.add_argument("--show", help="例: b09,m05（その部品の section の HTML だけを表示する）")
     a = ap.parse_args()
 
     base_html, more_html = read(BASE), read(MORE)
     base_secs, more_secs = sections(base_html, "s"), sections(more_html, "slide")
 
-    if a.list or not a.parts:
+    if a.show:
+        for tok in a.show.split(","):
+            m = re.match(r"^([bm])(\d{1,2})$", tok.strip().lower())
+            if not m:
+                sys.exit(f"パーツ指定が不正: {tok}")
+            pool = base_secs if m.group(1) == "b" else more_secs
+            idx = int(m.group(2))
+            if not 1 <= idx <= len(pool):
+                sys.exit(f"範囲外: {tok}")
+            print(f"<!-- {tok.strip().lower()} -->\n{pool[idx - 1]}\n")
+        return
+
+    if (a.list or not a.parts) and not a.all:
         if not a.parts and not a.list:
-            print("--parts で並び順を指定する（例: --parts b01,b02,m05,b09,b10）。一覧:", file=sys.stderr)
+            print("--parts で並び順を指定する（例: --parts b01,m01,m05,b09,b10）。一覧:", file=sys.stderr)
+        for pid, nm, use in CORE:
+            print(f"{pid}  {nm}：{use}")
+        print("（ほかの型は --list --all。どれも合わなければ規約の範囲で自由に組む）")
+        return
+
+    if a.list or not a.parts:
         for i, nm in enumerate(part_names(base_html, "s"), 1):
             print(f"b{i:02d}  {nm}")
         for i, nm in enumerate(part_names(more_html, "slide"), 1):

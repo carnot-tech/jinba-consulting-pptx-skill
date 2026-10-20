@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""snapshot.py — HTML デッキを PDF にし、目視用に4ページずつ1枚にまとめた画像を作る。
+
+使い方:
+  python3 scripts/snapshot.py mydeck.html            # mydeck.pdf と mydeck_sheet-1.png, -2.png, ... を出力
+  python3 scripts/snapshot.py mydeck.html --per 2    # 1枚に2ページ（細部を見たいとき）
+
+全ページを見る精度は保ったまま、画像を読む回数を減らすための道具。崩れが疑わしいページは
+--page 5 で1ページだけ大きく出して確かめる。依存: Google Chrome（または Chromium）、pdftoppm（poppler）、Pillow。
+"""
+import argparse
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+CHROME_CANDIDATES = [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
+]
+
+
+def chrome():
+    for c in CHROME_CANDIDATES:
+        if Path(c).exists() or shutil.which(c):
+            return c
+    sys.exit("Chrome が見つからない")
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("deck")
+    ap.add_argument("--per", type=int, default=4, choices=(1, 2, 4, 6))
+    ap.add_argument("--page", type=int, help="このページだけを大きく出す")
+    ap.add_argument("--dpi", type=int, default=90)
+    a = ap.parse_args()
+    deck = Path(a.deck).resolve()
+    pdf = deck.with_suffix(".pdf")
+    subprocess.run([chrome(), "--headless", "--disable-gpu", "--no-pdf-header-footer", f"--print-to-pdf={pdf}", str(deck)],
+                   capture_output=True, check=True)
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        sys.exit("Pillow が必要: pip3 install pillow")
+    with tempfile.TemporaryDirectory() as td:
+        rng = ["-f", str(a.page), "-l", str(a.page)] if a.page else []
+        dpi = a.dpi * 2 if a.page else a.dpi
+        subprocess.run(["pdftoppm", "-r", str(dpi), "-png", *rng, str(pdf), f"{td}/p"], check=True)
+        pages = sorted(Path(td).glob("p-*.png"))
+        ims = [Image.open(p).convert("RGB") for p in pages]
+        if a.page:
+            out = deck.with_name(f"{deck.stem}_page-{a.page}.png")
+            ims[0].save(out)
+            print(out)
+            return
+        cols = 1 if a.per == 1 else 2
+        rows = a.per // cols
+        w, h = ims[0].size
+        outs = []
+        for k in range(0, len(ims), a.per):
+            chunk = ims[k:k + a.per]
+            sheet = Image.new("RGB", (w * cols, h * rows), "white")
+            d = ImageDraw.Draw(sheet)
+            for i, im in enumerate(chunk):
+                x, y = (i % cols) * w, (i // cols) * h
+                sheet.paste(im, (x, y))
+                d.rectangle([x, y, x + w - 1, y + h - 1], outline="#999999")
+                d.text((x + 6, y + 4), f"P{k + i + 1}", fill="#d00000")
+            out = deck.with_name(f"{deck.stem}_sheet-{k // a.per + 1}.png")
+            sheet.save(out)
+            outs.append(out)
+    print(f"{pdf}（{len(ims)}ページ）")
+    for o in outs:
+        print(o)
+
+
+if __name__ == "__main__":
+    main()

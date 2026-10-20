@@ -357,6 +357,8 @@ body {
 
 .bar-wrap {
   position: relative;
+  box-sizing: border-box;
+  padding-top: 40px; /* 最も高い棒の数字を置く場所。数字を見出しの罫線に重ねない */
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -555,6 +557,8 @@ body {
 
 .wf-item {
   position: relative;
+  box-sizing: border-box;
+  padding-top: 40px; /* 最も高い棒の数字を置く場所 */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2716,9 +2720,11 @@ body {
 .ltree {
   display: flex;
   align-items: center;
+  width: 100%; /* 版面の幅いっぱいに使う（右側だけ空けない — slide-rules §4.54） */
   font-size: 15px;
   line-height: 1.4;
 }
+.ltree > .ltree-node { flex: 1; }
 .ltree-node {
   position: relative;
   display: flex;
@@ -2737,15 +2743,20 @@ body {
 .ltree-l1 {
   font-weight: 700;
   border-left-color: var(--ink);
-  max-width: 260px;
+  flex: 0 0 220px; /* 段ごとに幅を固定し、次の段の始まる位置を揃える */
+  max-width: none;
 }
 .ltree-l2 {
   font-weight: 600;
+  flex: 0 0 300px;
+  max-width: none;
 }
 .ltree-l3 {
   border-left-color: var(--cyan);
   color: var(--muted);
   font-size: 14px;
+  flex: 1 1 auto; /* 最後の段は残りの幅を使う */
+  max-width: none;
 }
 .ltree-children {
   display: flex;
@@ -2753,6 +2764,7 @@ body {
   gap: 10px;
   margin-left: 36px;
   min-width: 0;
+  flex: 1;
 }
 /* stub leaving the parent box */
 .ltree-box.has-children::after {

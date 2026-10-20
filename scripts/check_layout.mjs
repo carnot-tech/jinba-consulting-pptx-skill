@@ -21,6 +21,9 @@
 //  19. 棒グラフ: 項目名が軸の線より上にある（棒が線から浮いている）・凡例なしで棒の色が分かれている（WARN。§5.26・§5.5）
 //  20. 表の行の上下が間延びしている（行の高さから文字の高さを引いた余りが、文字の大きさの2.2倍超。WARN。§4.12）
 //  21. 列・軸の見出しが、その下の本文や行見出しより小さい（WARN。§6・§4.21）
+//  22. 文字が、ほかの要素の横罫（見出しの下罫・軸の線など）に重なっている（WARN）
+//  23. 同じ作りの箱の左端が、揃うはずの位置から少しずれている（ツリーの段の始まりなど。WARN。§4.51）
+//  24. 行のリスト（罫線で区切った行の並び）の間延び・左右2列の行の位置のずれ（WARN。§4.12・§4.51）
 //   4 の補足: 版面の30%超が空いているときは WARN（40%超は FAIL）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
 // 使い方: node scripts/check_layout.mjs deck.html   （playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
@@ -130,9 +133,9 @@ const { issues, warns } = await page.evaluate(() => {
       const span = contentBottom > contentTop ? contentBottom - contentTop : 0;
       const empty = area > 0 ? 1 - span / area : 0;
       if (empty > 0.4) {
-        out.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（40%超。表を割る・図を足す・2枚を1枚に統合する）`);
+        out.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（40%超。直し方は、文字を一段大きくする・配置を変える（右に意味合いの列を置く等）・前後のページと統合する。空きを埋めるために数字・事例・行を足さない。材料の無い内容を足すくらいなら、空いたまま残して理由を書く — §5.13）`);
       } else if (empty > 0.3) {
-        warnOut.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（30%超。「下が空きすぎ」と差し戻されやすい。文字を一段大きくする・右に意味合いを足す）`);
+        warnOut.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（30%超。「下が空きすぎ」と差し戻されやすい。文字を一段大きくする・配置を変える。空きを埋めるために中身を足さない — §5.13）`);
       }
     }
     // 13. 表の行の縦の引き伸ばし（§4.12）: 行の高さのうち、一番高いセルの中身と上下の余白を超える分を1行の高さで割る
@@ -499,13 +502,97 @@ const { issues, warns } = await page.evaluate(() => {
           }
         }
       }
+      // 22. 文字と横罫の重なり（文字の行の矩形を、ほかの要素の上罫・下罫が横切る）
+      {
+        const rules = [];
+        for (const el of s.querySelectorAll("*")) {
+          if (el.closest(".foot, .footer, footer")) continue;
+          const st = getComputedStyle(el), r = el.getBoundingClientRect();
+          if (r.width < 40) continue;
+          if (parseFloat(st.borderTopWidth) >= 1 && st.borderTopStyle !== "none") rules.push({ el, y: r.top, l: r.left, r: r.right });
+          if (parseFloat(st.borderBottomWidth) >= 1 && st.borderBottomStyle !== "none") rules.push({ el, y: r.bottom, l: r.left, r: r.right });
+        }
+        let hit = 0;
+        for (const el of els) {
+          if (hit || el.closest(".foot, .footer, footer, svg")) continue;
+          for (const t of ownTextRects(el)) {
+            const ln = rules.find((q) => !q.el.contains(el) && !el.contains(q.el) && q.y > t.top + 3 && q.y < t.bottom - 3 && Math.min(q.r, t.right) - Math.max(q.l, t.left) > 4);
+            if (ln) {
+              hit = 1;
+              warnOut.push(`p${n}: 文字「${(el.textContent || "").trim().slice(0, 14)}」が罫線に重なっている（数字・ラベルを線から離す。棒グラフなら最も高い棒の上に数字の場所を取る）`);
+              break;
+            }
+          }
+        }
+      }
+      // 23. 同じ作りの箱の左端のずれ（揃うはずの位置から 3〜60px ずれている）
+      {
+        const groups = {};
+        for (const el of s.querySelectorAll("div, li, span")) {
+          if (el.closest("table, svg, .foot, .footer, footer, .src, .bar, .hdr, h1, .title")) continue;
+          const st = getComputedStyle(el);
+          if (!isBoxed(st) || !(el.textContent || "").trim()) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width < 40 || r.height < 14) continue;
+          const key = el.tagName + "." + [...el.classList].sort().join(".");
+          (groups[key] ||= []).push(r.left);
+        }
+        for (const [key, ls] of Object.entries(groups)) {
+          if (ls.length < 3) continue;
+          const v = [...ls].sort((a, b) => a - b);
+          // 互いに60px以内に集まる左端の塊ごとに、ずれ幅を測る
+          let i = 0, found = 0;
+          while (i < v.length) {
+            let j = i;
+            while (j + 1 < v.length && v[j + 1] - v[i] <= 60) j++;
+            if (j - i >= 2 && v[j] - v[i] > 3) { found = Math.round(v[j] - v[i]); break; }
+            i = j + 1;
+          }
+          if (found) {
+            warnOut.push(`p${n}: 同じ作りの箱（${key.split(".").slice(1).join(".") || key}）の左端が ${found}px ずれている（段・列の始まる位置を揃える。箱の幅を中身で変えない — §4.51）`);
+            break;
+          }
+        }
+      }
+      // 24. 行のリスト（罫線で区切った行の並び）の間延びと、左右2列の行の位置のずれ
+      {
+        const lists = [];
+        for (const g of s.querySelectorAll("div, ul")) {
+          if (g.closest("table, svg, .foot, .footer, footer")) continue;
+          const kids = [...g.children].filter((c) => (c.textContent || "").trim());
+          if (kids.length < 3) continue;
+          const ruled = kids.filter((c) => { const st = getComputedStyle(c); return (parseFloat(st.borderTopWidth) >= 1 && st.borderTopStyle !== "none") || (parseFloat(st.borderBottomWidth) >= 1 && st.borderBottomStyle !== "none"); });
+          if (ruled.length < kids.length - 1) continue;
+          const rs = kids.map((c) => c.getBoundingClientRect());
+          if (rs.some((r, k) => k && r.top < rs[k - 1].bottom - 2)) continue; // 縦に並んだ行だけ
+          lists.push({ g, kids, rs });
+        }
+        let slackHit = 0;
+        for (const { kids, rs } of lists) {
+          const ratios = kids.map((c, k) => {
+            let top = Infinity, bot = -Infinity, fs = 0;
+            for (const el of [c, ...c.querySelectorAll("*")]) for (const x of ownTextRects(el)) { top = Math.min(top, x.top); bot = Math.max(bot, x.bottom); fs = Math.max(fs, parseFloat(getComputedStyle(el).fontSize)); }
+            return bot > top && fs ? (rs[k].height - (bot - top)) / fs : 0;
+          }).filter((x) => x > 0).sort((a, b) => a - b);
+          const med = ratios[Math.floor(ratios.length / 2)];
+          if (!slackHit && med > 2.2) { slackHit = 1; warnOut.push(`p${n}: 行のリストの上下が間延びしている（行の余白が文字の ${med.toFixed(1)} 倍。行を引き伸ばさず、余白と行間を詰める — §4.12）`); }
+        }
+        for (let a = 0; a < lists.length; a++) for (let b = a + 1; b < lists.length; b++) {
+          const A = lists[a], B = lists[b];
+          if (A.kids.length !== B.kids.length || A.g.contains(B.g) || B.g.contains(A.g)) continue;
+          const side = A.rs[0].right <= B.rs[0].left + 1 || B.rs[0].right <= A.rs[0].left + 1;
+          if (!side || Math.abs(A.rs[0].top - B.rs[0].top) > 40) continue;
+          const d = Math.max(...A.rs.map((r, k) => Math.abs(r.top - B.rs[k].top)));
+          if (d > 4) { warnOut.push(`p${n}: 左右の列の行の位置が ${Math.round(d)}px ずれている（対応する行は同じ高さに揃える。行見出しが折れて高さが変わっていないか確かめる — §4.51）`); a = lists.length; break; }
+        }
+      }
       // 11. 片側だけの空き：タイトルの横幅を基準に、本文の文字・図形が占める横の範囲の外側を測る
       const ttl2 = s.querySelector("h1, .title, .ttl");
       if (ttl2) {
         const tr = ttl2.getBoundingClientRect();
         let L = Infinity, R = -Infinity;
         for (const el of s.querySelectorAll("*")) {
-          if (el.closest("h1, .title, .ttl, .foot, .footer, footer, .src, .bar, .kicker")) continue;
+          if (el.closest("h1, .title, .ttl, .foot, .footer, footer, .src, .bar, .kicker, .hdr, .rule")) continue;
           const st = getComputedStyle(el);
           if (st.display === "none" || st.visibility === "hidden") continue;
           let r = null;

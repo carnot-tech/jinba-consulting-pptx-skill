@@ -400,6 +400,8 @@ def check_title(idx, title, explicit_break=False, closing=False):
     if not t:
         warn(f"p{idx}: タイトルが空（表紙/扉なら可）")
         return
+    if re.search(r"(\d+|[一二三四五六七八九十]+)(つ|点|観点|方向|段階|要素|領域|論点|問い)(に|で|へ)?(を)?(整理|分解|分け|まとめ|分類|束ね)(する|る|た)?$|順に見る$", t):
+        warn(f"p{idx}: タイトルが作業の説明になっている（「〜に分ける」「〜で整理する」は作り手の手順。分けた結果、何が言えるかを書く — §2.12・§2.19）: 「{t}」")
     if not closing and re.search(r"(です|ます|でした|ました)[。．.]?$", t):
         fail(f"p{idx}: タイトルがですます調 → 体言止めに: 「{t}」")
     # タイトルは PPTX/HTML とも2行まで許容。1行目安(TITLE_MAX=40字)超は WARN、2行にも収まらない長さ(>80字)だけ FAIL。
@@ -915,6 +917,10 @@ def check_html(path):
         titles.append(t)
         cls = (slide_classes[i - 1] if i - 1 < len(slide_classes) else "").split()
         nums.append((i, page_number(s)))
+        if not TEMPLATE_MODE and ("cover" in cls or "back" in cls or i == len(slides)):
+            left = [x for x in _leaf_texts(s) if re.fullmatch(r"当社|会社名|連絡先|お問い合わせ\s*当社|資料名|担当者名", x)]
+            if left:
+                fail(f"p{i}: 表紙・裏表紙に見本の文言が残っている「{left[0]}」（作成者・連絡先を実物にする）")
         edge = bool({"cover", "chap", "back"} & set(cls))
         if "std" in cls:
             # 正本から差し込んだ定型ページ（§4.99）は文章・版面の検査を飛ばす
@@ -963,6 +969,34 @@ def check_html(path):
     return titles
 
 
+NUM_FACT = re.compile(r"(?<![\d.,])(\d{1,3}(?:[,，]\d{3})+|\d+(?:\.\d+)?)\s*(%|％|ポイント|倍|億円|万円|千円|円|億|万|件|人|社|時間|ドル)")
+
+
+def _norm_num(x):
+    return x.replace(",", "").replace("，", "")
+
+
+def check_sources(html_path, sources_path):
+    """数字の出典の控え（sources.md）と照合する。デッキに出てくる数字（単位つき）が控えに無ければ WARN（SKILL.md 手順2）"""
+    sp = Path(sources_path)
+    if not sp.exists():
+        fail(f"出典の控え {sources_path} が無い（SKILL.md 手順2: 数字は調べて控えてから使う）")
+        return
+    src = _norm_num(sp.read_text(encoding="utf8", errors="ignore"))
+    html = Path(html_path).read_text(encoding="utf8", errors="ignore")
+    parts = re.split(r'<(?:section|div)[^>]*class="(?:[^"]*\bslide\b[^"]*|s|s [^"]*)"[^>]*>', html)[1:]
+    missing = []
+    for i, frag in enumerate(parts, 1):
+        vis = re.sub(r"<[^>]+>", " ", re.sub(r"<(script|style)[^>]*>.*?</\1>|<!--.*?-->", " ", frag, flags=re.S))
+        for m in NUM_FACT.finditer(vis):
+            n = _norm_num(m.group(1))
+            if n not in src:
+                missing.append(f"p{i}「{m.group(0).strip()}」")
+    if missing:
+        uniq = list(dict.fromkeys(missing))
+        warn(f"出典の控えに無い数字 ×{len(uniq)}: {' / '.join(uniq[:8])}（{sources_path} に出典を控えるか、試算なら前提と算式を書く。見つからない数字は「要確認」に — §2.23）")
+
+
 def main():
     global TEMPLATE_MODE
     args = sys.argv[1:]
@@ -982,6 +1016,11 @@ def main():
         k = args.index("--forbid")
         FORBIDDEN_TERMS = load_forbidden(args[k + 1])
         del args[k:k + 2]
+    sources = None
+    if "--sources" in args:
+        k = args.index("--sources")
+        sources = args[k + 1]
+        del args[k:k + 2]
     PART_TYPE_NAMES = _part_type_names()
     if not args:
         sys.exit(__doc__)
@@ -989,6 +1028,8 @@ def main():
     titles = check_pptx(p) if p.lower().endswith((".pptx", ".potx")) else check_html(p)
     if not TEMPLATE_MODE:
         check_title_variety(titles)
+    if sources and not p.lower().endswith((".pptx", ".potx")):
+        check_sources(p, sources)
     print("=== タイトル一覧（上から通し読みしてストーリーが繋がるか確認） ===")
     for i, t in enumerate(titles, 1):
         print(f"{i:>3}  {t or '(なし)'}")
