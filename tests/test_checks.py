@@ -816,6 +816,10 @@ class WorkFilesInDeck(unittest.TestCase):
         html = GOOD.replace("出典：架空データ（説明用）", "出典：架空データ（説明用）。試算の前提は sources.md 参照", 1)
         self.assertTrue(any("作り手の控え" in l for l in run(html)[1]))
 
+    def test_sources_md_after_japanese_fails(self):
+        html = GOOD.replace("出典：架空データ（説明用）", "出典：架空データ（算式は添付のsources.mdを参照）", 1)
+        self.assertTrue(any("作り手の控え" in l for l in run(html)[1]))
+
     def test_good_deck_passes(self):
         self.assertFalse(any("作り手の控え" in l for l in run(GOOD)[1]))
 

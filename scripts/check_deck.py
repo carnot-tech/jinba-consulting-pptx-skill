@@ -749,7 +749,7 @@ def check_framework_and_commas(idx, leaves, vis):
         warn(f"p{idx}: 日本語の文の中に半角カンマ「{m.group(0)}」（読点「、」にする）")
 
 
-WORK_FILES = re.compile(r"\b(sources|qa|REPORT)\.md\b")
+WORK_FILES = re.compile(r"(?<![A-Za-z0-9_])(sources|qa|REPORT)\.md(?![A-Za-z0-9_])")  # 日本語に直接続く「のsources.md」も拾う
 
 
 def check_work_files(idx, text):
