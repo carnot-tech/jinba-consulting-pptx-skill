@@ -723,6 +723,16 @@ def check_garbled(idx, text):
         fail(f"p{idx}: 文字化けの痕 ×{len(hits)}（{' '.join(cps[:4])}）（元の文字に打ち直す。編集画面での並べ替え・変換のあとに起きやすい）")
 
 
+WORK_FILES = re.compile(r"\b(sources|qa|REPORT)\.md\b")
+
+
+def check_work_files(idx, text):
+    """§2.23: 読み手は作り手の控え（sources.md・qa.md）を見ない。デッキの注でそこを根拠として指さない"""
+    m = WORK_FILES.search(text)
+    if m:
+        fail(f"p{idx}: 作り手の控えのファイル名「{m.group(0)}」がデッキに出ている（読み手は見ない。試算の前提と算式・出典は、そのページの注か付録に書く — §2.23）")
+
+
 class _ListCounter(HTMLParser):
     """ul/ol ごとに直下の li の数を数える（入れ子も別々に数える）"""
     def __init__(self):
@@ -922,6 +932,7 @@ def check_html(path):
     for i, s in enumerate(slides, 1):
         vis = re.sub(r"<[^>]+>", " ", re.sub(r"<(script|style)[^>]*>.*?</\1>|<!--.*?-->", " ", s, flags=re.S))
         check_garbled(i, vis)
+        check_work_files(i, vis)
         if not TEMPLATE_MODE:
             check_type_id(i, vis)
         m = re.search(r"<h1[^>]*>(.*?)</h1>", s, re.S) or re.search(r'class="[^"]*\b(?:ttl|title|msg)\b[^"]*"[^>]*>(.*?)</', s, re.S)

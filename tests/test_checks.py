@@ -809,6 +809,17 @@ class MetaTitle(unittest.TestCase):
         self.assertTrue(any("作業の説明で終わっている" in l for l in warns(html)))
 
 
+class WorkFilesInDeck(unittest.TestCase):
+    """check_deck：デッキに作り手の控え（sources.md など）のファイル名が出ていたら FAIL（§2.23）"""
+
+    def test_sources_md_in_note_fails(self):
+        html = GOOD.replace("出典：架空データ（説明用）", "出典：架空データ（説明用）。試算の前提は sources.md 参照", 1)
+        self.assertTrue(any("作り手の控え" in l for l in run(html)[1]))
+
+    def test_good_deck_passes(self):
+        self.assertFalse(any("作り手の控え" in l for l in run(GOOD)[1]))
+
+
 class CoverPlaceholder(unittest.TestCase):
     """check_deck：表紙・裏表紙に見本の文言（当社・会社名・連絡先・「表紙」のラベル）が残っていたら FAIL"""
 
