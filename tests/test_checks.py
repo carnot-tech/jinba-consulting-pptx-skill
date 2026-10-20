@@ -650,6 +650,11 @@ class TypeIdLeftover(unittest.TestCase):
         code, fails = run(inject("<span>3</span>", "<span>3</span><table><tr><td>05</td><td>user_id</td></tr></table>"))
         self.assertFalse(any("型ID" in l for l in fails), fails)
 
+    def test_single_word_type_id_fails(self):
+        for tid in ("34  gantt", "15  matrix_2x2"):
+            code, fails = run(inject("<span>3</span>", f"<span>3</span><i>{tid}</i>"))
+            self.assertTrue(any("型ID" in l for l in fails), (tid, fails))
+
 
 @unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
 class BarAxisAndColors(LayoutFeedback20261012):

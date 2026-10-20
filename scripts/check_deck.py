@@ -773,7 +773,7 @@ def _part_type_ids():
     fp = Path(__file__).resolve().parent.parent / "templates" / "freeform_parts_more_16x9.html"
     if not fp.exists():
         return set()
-    return set(re.findall(r'class="kicker">\s*\d{2}\s+([a-z]+(?:_[a-z]+)+)\s*<', fp.read_text(encoding="utf8", errors="ignore")))
+    return set(re.findall(r'class="kicker">\s*\d{2}\s+([a-z][a-z0-9_]*)\s*<', fp.read_text(encoding="utf8", errors="ignore")))
 
 
 _TYPE_IDS = _part_type_ids()
