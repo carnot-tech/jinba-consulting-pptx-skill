@@ -425,6 +425,16 @@ def check_title(idx, title, explicit_break=False, closing=False):
 
 
 # テンプレの見本タイトルは「形の参考」であって埋める鋳型ではない（slide-rules §2.8）。同じ文型が並んだら WARN。
+COUNT_GROUP = re.compile(r"(?<![\d.])([2-9２-９]|[二三四五六])\s*(つの|つに|本の|本柱|点の|点を|点に|領域|段階|つ$|本$|点$)")
+
+
+def check_count_titles(titles):
+    """§2.4・§4.103: 数で束ねたタイトル（「3つの壁」「3本柱」「3点の承認」）が3枚以上なら、型が透けて見える"""
+    hits = [t for t in titles if t and COUNT_GROUP.search(t)]
+    if len(hits) >= 3:
+        warn(f"数で束ねたタイトルが {len(hits)} 枚: 「{hits[0][:24]}」ほか（§4.103: 課題や打ち手の数は材料で決め、3つに揃えない。束ねる数でなく中身を書く — §2.4）")
+
+
 def check_title_variety(titles):
     real = [t.strip() for t in titles if t and t.strip()]
     if len(real) < 5:
@@ -1028,6 +1038,7 @@ def main():
     titles = check_pptx(p) if p.lower().endswith((".pptx", ".potx")) else check_html(p)
     if not TEMPLATE_MODE:
         check_title_variety(titles)
+        check_count_titles(titles)
     if sources and not p.lower().endswith((".pptx", ".potx")):
         check_sources(p, sources)
     print("=== タイトル一覧（上から通し読みしてストーリーが繋がるか確認） ===")

@@ -130,6 +130,7 @@ CORE = [
     ("b06", "前提→帰結の2カラム", "左に事実・表、右に「だから何が起きるか」。強い因果に三角"),
     ("b07", "大型数値の表＋読み取り", "数値を行に並べ、右に読み取り"),
     ("b09", "軸のある表", "行＝項目・列＝観点で比べる。カードの羅列の代わり"),
+    ("b09:axb", "軸ボックスの表", "行の軸（領域・役割・課題など）を左の塗りの箱で示し、右に観点の列を並べる。各行を同じ観点で比べるとき"),
     ("b11", "主張パネル＋図", "左の濃色パネルに論点番号と主張、右に図表（章の各論）"),
     ("b26", "課題と打ち手の2カラム", "課題と打ち手を行で対応させる"),
     ("m05", "単一チャート＋含意", "1つの棒グラフで事実を示し、右に意味合い（項目比較・時系列）"),
@@ -144,6 +145,20 @@ CORE = [
     ("m35", "意思決定ページ", "決めてほしいことと推奨を示す"),
     ("b10", "裏表紙", "締め（出典行に制作クレジット1行）"),
 ]
+
+
+VARIANTS = {"axb"}  # 部品の変形（b09:axb＝軸ボックスの表）
+
+
+def apply_variant(sec, var):
+    """変形の class を、その部品の最初の table に付ける"""
+    if not var:
+        return sec
+    if var not in VARIANTS:
+        sys.exit(f"変形の指定が不正: :{var}（使えるもの: {', '.join(sorted(VARIANTS))}）")
+    if re.search(r"<table\b[^>]*\bclass=\"", sec):
+        return re.sub(r'(<table\b[^>]*\bclass=")', rf"\g<1>{var} ", sec, count=1)
+    return re.sub(r"<table\b", f'<table class="{var}"', sec, count=1)
 
 
 def main():
@@ -161,14 +176,14 @@ def main():
 
     if a.show:
         for tok in a.show.split(","):
-            m = re.match(r"^([bm])(\d{1,2})$", tok.strip().lower())
+            m = re.match(r"^([bm])(\d{1,2})(?::(\w+))?$", tok.strip().lower())
             if not m:
                 sys.exit(f"パーツ指定が不正: {tok}")
             pool = base_secs if m.group(1) == "b" else more_secs
             idx = int(m.group(2))
             if not 1 <= idx <= len(pool):
                 sys.exit(f"範囲外: {tok}")
-            print(f"<!-- {tok.strip().lower()} -->\n{pool[idx - 1]}\n")
+            print(f"<!-- {tok.strip().lower()} -->\n{apply_variant(pool[idx - 1], m.group(3))}\n")
         return
 
     if (a.list or not a.parts) and not a.all:
@@ -189,14 +204,14 @@ def main():
     picked = []
     for tok in a.parts.split(","):
         tok = tok.strip().lower()
-        m = re.match(r"^([bm])(\d{1,2})$", tok)
+        m = re.match(r"^([bm])(\d{1,2})(?::(\w+))?$", tok)
         if not m:
-            sys.exit(f"パーツ指定が不正: {tok}（b01〜b{len(base_secs):02d} / m01〜m{len(more_secs):02d}）")
+            sys.exit(f"パーツ指定が不正: {tok}（b01〜b{len(base_secs):02d} / m01〜m{len(more_secs):02d}。変形は b09:axb）")
         kind, idx = m.group(1), int(m.group(2))
         pool = base_secs if kind == "b" else more_secs
         if not 1 <= idx <= len(pool):
             sys.exit(f"範囲外: {tok}")
-        picked.append((kind, pool[idx - 1]))
+        picked.append((kind, apply_variant(pool[idx - 1], m.group(3))))
 
     # ページ番号を振り直す（表紙・裏表紙＝ b01 / b10 は番号なし）
     page = 0

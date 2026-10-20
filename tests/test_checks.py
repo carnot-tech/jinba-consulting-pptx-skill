@@ -869,3 +869,30 @@ class HeadlessShell(unittest.TestCase):
                 diff = ImageChops.difference(ia, ib)
                 changed = sum(1 for v in diff.getdata() if v > 40) / (ia.size[0] * ia.size[1])
                 self.assertLess(changed, 0.005, f"{a.name} が Chrome 本体と {changed:.2%} 違う")
+
+
+class CountTitles(unittest.TestCase):
+    """check_deck：数で束ねたタイトル（「3つの」「3本の」「3点」）が3枚以上なら WARN（§4.103）"""
+
+    def test_three_count_titles_warn(self):
+        html = GOOD
+        for old, new in (("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "承認の遅れは3つの壁で起きている"),):
+            html = html.replace(old, new, 1)
+        html = html.replace("</body>", "".join(f'<section class="s"><h1>{t}</h1><div class="foot"><span>9</span></div></section>'
+                                                for t in ("来期は3本柱で進める", "本日は3点を承認いただきたい")) + "</body>", 1)
+        self.assertTrue(any("数で束ねたタイトル" in l for l in warns(html)))
+
+    def test_good_deck_passes(self):
+        self.assertFalse(any("数で束ねたタイトル" in l for l in warns(GOOD)))
+
+
+class PartVariant(unittest.TestCase):
+    """new_deck.py：b09:axb で軸ボックスの表になる"""
+
+    def test_axb_variant(self):
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "new_deck.py"), "--show", "b09:axb"], capture_output=True, text=True)
+        self.assertIn('<table class="axb"', r.stdout)
+
+    def test_unknown_variant_fails(self):
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "new_deck.py"), "--show", "b09:zzz"], capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
