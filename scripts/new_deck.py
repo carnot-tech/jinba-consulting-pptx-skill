@@ -205,10 +205,46 @@ def main():
     padding:var(--margin-y) var(--margin-x);box-sizing:border-box;
     transform:scale(0.8);transform-origin:top left}}
 }}
+/* ===== 画面幅がスライド幅（338.67mm）より狭いときは等比で縮める（下の script が .fitwrap で包む） =====
+   印刷・PDF・check_layout（いずれも印刷メディア）では縮小を外して原寸に戻す。
+   パーツ集側の .fitwrap 指定は結合時に .s の内側へスコープされて効かないので、ここで指定する */
+@media print{{
+  .fitwrap{{width:auto!important;height:auto!important;margin:0!important;overflow:visible!important}}
+  .fitwrap>.s, .fitwrap>.slide{{transform:none!important}}
+}}
 </style></head><body>
 <main class="deck skin-warm">
 {chr(10).join(body)}
 </main>
+<script>
+(function () {{
+  var printing = window.matchMedia ? window.matchMedia("print") : null;
+  function fit() {{
+    var avail = Math.max(320, document.documentElement.clientWidth - 24);
+    document.querySelectorAll(".deck > .s, .deck > .slide, .fitwrap > .s, .fitwrap > .slide").forEach(function (el) {{
+      var wrap = el.parentElement;
+      if (!wrap.classList.contains("fitwrap")) {{
+        var cs = getComputedStyle(el);
+        wrap = document.createElement("div");
+        wrap.className = "fitwrap";
+        wrap.style.overflow = "hidden";
+        wrap.style.margin = cs.marginTop + " auto " + cs.marginBottom;
+        el.parentNode.insertBefore(wrap, el);
+        wrap.appendChild(el);
+        el.style.margin = "0";
+      }}
+      el.style.transform = "";
+      var s = (printing && printing.matches) ? 1 : Math.min(1, avail / el.offsetWidth);
+      el.style.transformOrigin = "top left";
+      el.style.transform = s < 1 ? "scale(" + s + ")" : "";
+      wrap.style.width = el.offsetWidth * s + "px";
+      wrap.style.height = el.offsetHeight * s + "px";
+    }});
+  }}
+  window.addEventListener("resize", fit);
+  fit();
+}})();
+</script>
 </body></html>
 """
     # ファイル名は NFC に揃える（macOS は濁点を分けた形で保存することがあり、Windows で文字化けして見える — slide-rules §8）
