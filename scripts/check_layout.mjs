@@ -103,17 +103,6 @@ const { issues, warns } = await page.evaluate(() => {
       const ttl = s.querySelector("h1, .title, .ttl");
       const top = ttl ? ttl.getBoundingClientRect().bottom : sr.top;
       const bottom = fr ? fr.top : sr.bottom;
-      let contentBottom = -Infinity, contentTop = Infinity;
-      for (const el of els) {
-        if (el === ttl || (ttl && ttl.contains(el))) continue;
-        if (el.closest(".src, .bar")) continue; // 出典行・上部バーは本文に数えない
-        if (el.children.length > 0 && el.tagName !== "IMG" && el.tagName !== "svg") continue;
-        const r = el.getBoundingClientRect();
-        if (r.height === 0 || r.width === 0) continue;
-        if (r.bottom <= top + 1 || r.top >= bottom - 1) continue; // タイトルより上（右上のラベル等）・フッターより下は版面の外
-        contentBottom = Math.max(contentBottom, r.bottom);
-        contentTop = Math.min(contentTop, r.top);
-      }
       // 図形（svg・画像・塗りや罫線のある箱）も本文に数える
       const isShape = (el) => {
         if (/^(svg|img|canvas)$/i.test(el.tagName)) return true;
@@ -123,23 +112,57 @@ const { issues, warns } = await page.evaluate(() => {
         const bordered = ["Top", "Right", "Bottom", "Left"].some((k) => parseFloat(st[`border${k}Width`]) > 0 && st[`border${k}Style`] !== "none");
         return filled || bordered || st.clipPath !== "none";
       };
-      for (const el of s.querySelectorAll("*")) {
-        if (el.closest(".bar, .src") || (foot && foot.contains(el))) continue;
-        if (el.closest("h1, .title, .ttl")) continue;
-        if (!isShape(el)) continue;
-        const r = el.getBoundingClientRect();
-        if (r.height > 0 && r.bottom <= bottom + 1 && r.top >= top - 1) {
+      // 本文が占める縦の範囲（span）と、フッターへのはみ出し（over）を測る
+      const spanNow = () => {
+        let contentBottom = -Infinity, contentTop = Infinity, maxText = -Infinity;
+        for (const el of els) {
+          if (el === ttl || (ttl && ttl.contains(el))) continue;
+          if (el.children.length > 0 && el.tagName !== "IMG" && el.tagName !== "svg") continue;
+          const r = el.getBoundingClientRect();
+          if (r.height === 0 || r.width === 0) continue;
+          if (r.bottom > top + 1) maxText = Math.max(maxText, r.bottom);
+          if (el.closest(".src, .bar")) continue; // 出典行・上部バーは本文に数えない
+          if (r.bottom <= top + 1 || r.top >= bottom - 1) continue; // タイトルより上（右上のラベル等）・フッターより下は版面の外
           contentBottom = Math.max(contentBottom, r.bottom);
           contentTop = Math.min(contentTop, r.top);
         }
-      }
+        for (const el of s.querySelectorAll("*")) {
+          if (el.closest(".bar, .src") || (foot && foot.contains(el))) continue;
+          if (el.closest("h1, .title, .ttl")) continue;
+          if (!isShape(el)) continue;
+          const r = el.getBoundingClientRect();
+          if (r.height > 0 && r.bottom <= bottom + 1 && r.top >= top - 1) {
+            contentBottom = Math.max(contentBottom, r.bottom);
+            contentTop = Math.min(contentTop, r.top);
+          }
+        }
+        return { span: contentBottom > contentTop ? contentBottom - contentTop : 0, over: maxText - bottom };
+      };
       const area = bottom - top;
-      const span = contentBottom > contentTop ? contentBottom - contentTop : 0;
+      const span = spanNow().span;
       const empty = area > 0 ? 1 - span / area : 0;
+      // 本文の器を何倍にすれば空きが収まるか（§4.12 の「一段大きく」＝本文の大きさの揃い ±15% の範囲）を試算して添える
+      const fitHint = () => {
+        const box = s.querySelector(":scope .c, :scope .sinner > .content");
+        if (!box || area <= 0) return "";
+        const orig = box.style.zoom;
+        let best = null;
+        for (const z of [1.05, 1.1, 1.15]) {
+          box.style.zoom = String(z);
+          const m = spanNow();
+          if (m.over > 1) break;
+          best = { z, empty: 1 - m.span / area };
+          if (best.empty <= 0.28) break;
+        }
+        box.style.zoom = orig;
+        const name = box.classList.contains("c") ? ".c" : ".content";
+        if (best && best.empty <= 0.4) return ` 試算: このページの本文の器（${name}）に zoom:${best.z} を付けると空き約${Math.round(best.empty * 100)}%（はみ出しなし）。`;
+        return " 試算: 本文を1.15倍にしても40%を切らない。前後のページとまとめるか、形を変える（文字をさらに大きくすると、他のページと本文の大きさが揃わなくなる）。";
+      };
       if (empty > 0.4) {
-        out.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（40%超。直し方は、文字を一段大きくする・配置を変える（右に意味合いの列を置く等）・前後のページと統合する。空きを埋めるために数字・事例・行を足さない。項目の間や列の高さを広げて埋めない — §4.12・§5.13）`);
+        out.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（40%超。直し方は、文字を一段大きくする・配置を変える（右に意味合いの列を置く等）・前後のページと統合する。空きを埋めるために数字・事例・行を足さない。項目の間や列の高さを広げて埋めない — §4.12・§5.13）${fitHint()}`);
       } else if (empty > 0.3) {
-        warnOut.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（30%超。「下が空きすぎ」と差し戻されやすい。文字を一段大きくする・配置を変える。空きを埋めるために中身を足さない — §5.13）`);
+        warnOut.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（30%超。「下が空きすぎ」と差し戻されやすい。文字を一段大きくする・配置を変える。空きを埋めるために中身を足さない — §5.13）${fitHint()}`);
       }
     }
     // 13. 表の行の縦の引き伸ばし（§4.12）: 行の高さのうち、一番高いセルの中身と上下の余白を超える分を1行の高さで割る
