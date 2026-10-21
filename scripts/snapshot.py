@@ -37,6 +37,9 @@ def main():
     a = ap.parse_args()
     deck = Path(a.deck).resolve()
     pdf = deck.with_suffix(".pdf")
+    # 前回の実行で残ったまとめ画像を消す（ページ数が減ったときに古い sheet が紛れ込まないように）
+    for old in deck.parent.glob(f"{deck.stem}_sheet-*.png"):
+        old.unlink()
     subprocess.run([chrome(), "--headless", "--disable-gpu", "--no-pdf-header-footer", f"--print-to-pdf={pdf}", str(deck)],
                    capture_output=True, check=True)
     try:
@@ -49,6 +52,9 @@ def main():
         subprocess.run(["pdftoppm", "-r", str(dpi), "-png", *rng, str(pdf), f"{td}/p"], check=True)
         pages = sorted(Path(td).glob("p-*.png"))
         ims = [Image.open(p).convert("RGB") for p in pages]
+        if not ims:
+            sys.exit(f"{pdf} から画像を作れなかった（--page {a.page} がページ数を超えている）" if a.page
+                     else f"{pdf} にページが無い（HTML にスライドがあるか確かめる）")
         if a.page:
             out = deck.with_name(f"{deck.stem}_page-{a.page}.png")
             ims[0].save(out)

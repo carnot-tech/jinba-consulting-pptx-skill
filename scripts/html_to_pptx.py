@@ -291,6 +291,15 @@ def local_media(src, html):
     return p if p.exists() and p.suffix.lower() in VIDEO_MIME else None
 
 
+def _ffmpeg_poster(mv, poster):
+    """動画の最初の1コマを取り出す。stdin を読まず（パイプライン内で止まらない）、時間を区切る"""
+    try:
+        return subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", str(mv), "-frames:v", "1", str(poster)],
+                              stdin=subprocess.DEVNULL, capture_output=True, timeout=60).returncode == 0
+    except subprocess.TimeoutExpired:
+        return False
+
+
 def convert(html, out, external=False):
     here = Path(__file__).resolve().parent
     with tempfile.TemporaryDirectory() as td:
@@ -326,7 +335,7 @@ def convert(html, out, external=False):
                         # 再生前の静止画は、動画ファイルから ffmpeg で最初の1コマを取り出す（ブラウザの動画対応に頼らない。
                         # Linux の Chromium は H.264 を再生できないことがあり、描画した1コマが黒くなるため）。ffmpeg が無ければ描画した1コマ
                         poster = Path(td) / f"poster_{it['file']}"
-                        if shutil.which("ffmpeg") and subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(mv), "-frames:v", "1", str(poster)]).returncode == 0 and poster.exists():
+                        if shutil.which("ffmpeg") and _ffmpeg_poster(mv, poster) and poster.exists():
                             p = poster
                         slide.shapes.add_movie(str(mv), sc(it["x"]), sc(it["y"]), sc(it["w"]), sc(it["h"]),
                                                poster_frame_image=str(p) if p.exists() else None,

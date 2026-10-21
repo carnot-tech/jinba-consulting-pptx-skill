@@ -684,6 +684,27 @@ class BarAxisAndColors(LayoutFeedback20261012):
         out = self.layout(self.chart(colors=("#322014", "#C5A681", "#5A3921", "#322014"), legend='<div class="legend">凡例</div>'))
         self.assertFalse(any("凡例が無い" in l for l in out), out)
 
+    def test_single_accent_bar_pass(self):
+        # 目を向けたい1本だけ色を変えるのは推奨どおり（§5.26/§5.5）
+        out = self.layout(self.chart(colors=("#322014", "#322014", "#322014", "#C5A681")))
+        self.assertFalse(any("凡例が無い" in l for l in out), out)
+
+    def test_card_below_chart_is_not_axis(self):
+        # 棒の下に置いた下罫つきのカードを軸と取り違えない
+        out = self.layout(self.chart().replace("border-bottom:2px solid #333;margin-bottom:52px", "margin-bottom:0")
+                          + '<div style="border-bottom:1px solid #ccc;padding:40px 8px 8px">補足のカード</div>')
+        self.assertFalse(any("軸の線より上" in l for l in out), out)
+
+    def test_two_charts_side_by_side_checked_separately(self):
+        # 2カラムに並んだ2つの棒グラフを1つに合流させない（棒を器の直下に並べる作り）
+        def bars(hs, colors):
+            return "".join(f'<div style="width:50px;height:{h}px;background:{c}"></div>' for h, c in zip(hs, colors))
+        one = "display:flex;align-items:flex-end;gap:16px;height:260px;border-bottom:2px solid #333"
+        body = (f'<div style="display:flex;gap:80px"><div style="{one}">{bars((80, 140, 220), ("#322014", "#322014", "#C5A681"))}</div>'
+                f'<div style="{one}">{bars((60, 120, 180, 200), ("#322014",) * 4)}</div></div>')
+        out = self.layout(body)
+        self.assertFalse(any("凡例が無い" in l or "下端が" in l for l in out), out)
+
 
 @unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
 class RowSlackAndHeadingSize(LayoutFeedback20261012):

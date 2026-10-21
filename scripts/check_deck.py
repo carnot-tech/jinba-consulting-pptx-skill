@@ -966,13 +966,10 @@ def check_html(path):
     # タイトル抽出
     titles = []
     shapes = []
-    pat = r'<(?:section|div)[^>]*class="(?:[^"]*\bslide\b[^"]*|s|s [^"]*)"[^>]*>'
-    parts = re.split(pat, html)
-    slides = parts[1:] if len(parts) > 1 else []
-    slide_classes = re.findall(pat.replace('class="(?:', 'class="((?:', 1).replace(')"[^>]*>', '))"[^>]*>', 1), html)
+    slides, slide_classes = _slides(html)
     nums, heads = [], []
     for i, s in enumerate(slides, 1):
-        vis = re.sub(r"<[^>]+>", " ", re.sub(r"<(script|style)[^>]*>.*?</\1>|<!--.*?-->", " ", s, flags=re.S))
+        vis = _visible(s)
         check_garbled(i, vis)
         check_work_files(i, vis)
         if not TEMPLATE_MODE:
@@ -1063,6 +1060,22 @@ def _src_numbers(text):
     return out
 
 
+SLIDE_OPEN = re.compile(r'<(?:section|div)[^>]*class="((?:[^"]*\bslide\b[^"]*|s|s [^"]*))"[^>]*>')
+
+
+def _slides(html):
+    """スライドの区切り。(各スライドの断片のリスト, 各スライドの class のリスト) を返す。
+    スライドを数える検査はすべてこれを使い、ページ番号がずれないようにする"""
+    parts = SLIDE_OPEN.split(html)
+    # キャプチャした class も返るので [前置き, class1, 断片1, class2, 断片2, ...] になる
+    return parts[2::2], parts[1::2]
+
+
+def _visible(frag):
+    """script・style・コメントを除いた見える文字（タグは空白に置き換える）"""
+    return re.sub(r"<[^>]+>", " ", re.sub(r"<(script|style)[^>]*>.*?</\1>|<!--.*?-->", " ", frag, flags=re.S))
+
+
 def check_sources(html_path, sources_path):
     """数字の出典の控え（sources.md）と照合する。デッキに出てくる数字（単位つき）が控えに無ければ WARN（SKILL.md 手順2）"""
     sp = Path(sources_path)
@@ -1071,10 +1084,9 @@ def check_sources(html_path, sources_path):
         return
     src = _src_numbers(sp.read_text(encoding="utf8", errors="ignore"))
     html = Path(html_path).read_text(encoding="utf8", errors="ignore")
-    parts = re.split(r'<(?:section|div)[^>]*class="(?:[^"]*\bslide\b[^"]*|s|s [^"]*)"[^>]*>', html)[1:]
     missing = []
-    for i, frag in enumerate(parts, 1):
-        vis = re.sub(r"<[^>]+>", " ", re.sub(r"<(script|style)[^>]*>.*?</\1>|<!--.*?-->", " ", frag, flags=re.S))
+    for i, frag in enumerate(_slides(html)[0], 1):
+        vis = _visible(frag)
         for m in NUM_FACT.finditer(vis):
             n = _norm_num(m.group(1))
             if n not in src and (n.rstrip("0").rstrip(".") if "." in n else n) not in src:

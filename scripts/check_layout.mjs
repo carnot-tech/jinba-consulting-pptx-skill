@@ -497,37 +497,57 @@ const { issues, warns } = await page.evaluate(() => {
           if (r.width < 8 || r.width > sr.width * 0.25 || r.height < 4) continue;
           cand.push({ el, r, bg: st.backgroundColor });
         }
-        // 同じ親（または祖父）の下に並ぶ箱を1つの棒の並びとみなす（下端がずれていても拾う）
-        const groups = new Map();
-        for (const c of cand) for (const k of [c.el.parentElement, c.el.parentElement?.parentElement]) if (k) { if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); }
-        let barHit = 0;
-        for (const g of [...groups.values()].sort((a, b) => b.length - a.length)) {
-          if (barHit) break;
-          if (g.length < 3) continue;
-          const ws = g.map((c) => c.r.width);
-          if (Math.max(...ws) / Math.min(...ws) > 1.3) continue;
-          const hs = new Set(g.map((c) => Math.round(c.r.height)));
-          if (hs.size < 2) continue; // 高さが全部同じなら棒グラフではない（チップ・目盛りの並び）
-          // 横に並んでいるもの（縦の範囲が重なる）だけ
-          if (Math.max(...g.map((c) => c.r.top)) > Math.min(...g.map((c) => c.r.bottom))) continue;
-          barHit = 1;
+        // 同じ親の下に並ぶ箱を1つの棒の並びとみなす。親で棒の並びにならなかった箱だけを祖父でまとめる
+        // （棒を1本ずつ列で包む作り。下端がずれていても拾う）。2カラムに並んだ別々の棒グラフを1つに合流させず、それぞれ検査する
+        const used = new Set();
+        const barGroups = [];
+        for (const up of [(e) => e.parentElement, (e) => e.parentElement?.parentElement]) {
+          const groups = new Map();
+          for (const c of cand) {
+            if (used.has(c)) continue;
+            const k = up(c.el);
+            if (!k) continue;
+            if (!groups.has(k)) groups.set(k, []);
+            groups.get(k).push(c);
+          }
+          for (const g of groups.values()) {
+            if (g.length < 3) continue;
+            const ws = g.map((c) => c.r.width);
+            if (Math.max(...ws) / Math.min(...ws) > 1.3) continue;
+            const hs = new Set(g.map((c) => Math.round(c.r.height)));
+            if (hs.size < 2) continue; // 高さが全部同じなら棒グラフではない（チップ・目盛りの並び）
+            // 横に並んでいるもの（縦の範囲が重なる）だけ
+            if (Math.max(...g.map((c) => c.r.top)) > Math.min(...g.map((c) => c.r.bottom))) continue;
+            for (const c of g) used.add(c);
+            barGroups.push(g);
+          }
+        }
+        for (const g of barGroups) {
           const L = Math.min(...g.map((c) => c.r.left)), R = Math.max(...g.map((c) => c.r.right));
           const bottom = Math.max(...g.map((c) => c.r.bottom)), low = Math.min(...g.map((c) => c.r.bottom));
           if (bottom - low > 3) warnOut.push(`p${n}: 棒の下端が ${Math.round(bottom - low)}px ずれている（項目名の行数で棒が押し上げられている。棒は同じ軸の線に乗せる — §5.26）`);
-          // 棒の下端より下にある、棒の並びの幅いっぱいの横線（軸の線）
+          // 棒の下端より下にある、棒の並びの幅いっぱいの横線（軸の線）。軸とみなすのは、棒を包む器の下罫か、
+          // 文字の無い細い線の要素だけ（棒の下に置いた下罫つきのカードやラッパーを軸と取り違えない）
           let axisY = null;
           for (const el of s.querySelectorAll("*")) {
             const st = getComputedStyle(el), r = el.getBoundingClientRect();
             if (r.left > L + 2 || r.right < R - 2) continue;
+            const wrapsBars = g.every((c) => el.contains(c.el));
+            const thinLine = r.height <= 6 && !(el.textContent || "").trim();
+            if (!wrapsBars && !thinLine) continue;
             if (parseFloat(st.borderBottomWidth) >= 1 && st.borderBottomStyle !== "none" && r.bottom >= bottom - 2 && r.bottom <= bottom + 80) axisY = axisY === null ? r.bottom : Math.min(axisY, r.bottom);
           }
           if (axisY !== null && axisY - bottom > 4) {
             const between = els.some((el) => ownTextRects(el).some((t) => t.left >= L - 4 && t.right <= R + 4 && t.top >= bottom - 2 && t.bottom <= axisY + 2));
             if (between) warnOut.push(`p${n}: 棒グラフの項目名が軸の線より上にある（棒が線から浮いている。棒を軸の線に乗せ、項目名は線の下に出す — §5.26）`);
           }
+          // 目を向けたい1本だけ色を変えるのは §5.26/§5.5 の推奨どおりなので、3色以上か、主色と違う棒が2本以上のときだけ
           const colors = new Set(g.map((c) => c.bg));
+          const tally = new Map();
+          for (const c of g) tally.set(c.bg, (tally.get(c.bg) || 0) + 1);
+          const offMain = g.length - Math.max(...tally.values());
           const legend = s.querySelector('[class*="legend"]') || /凡例/.test(s.textContent || "");
-          if (colors.size >= 2 && !legend) warnOut.push(`p${n}: 棒の色が ${colors.size} 色に分かれているのに凡例が無い（色を変えるのは目を向けたい1本だけにし、凡例か注記で理由を書く — §5.5）`);
+          if ((colors.size >= 3 || offMain >= 2) && !legend) warnOut.push(`p${n}: 棒の色が ${colors.size} 色に分かれているのに凡例が無い（色を変えるのは目を向けたい1本だけにし、凡例か注記で理由を書く — §5.5）`);
         }
       }
       // 20. 表の行の間延び（13 の引き伸ばしとは別に、セルの上下の余白と行間が大きすぎる行を拾う）
