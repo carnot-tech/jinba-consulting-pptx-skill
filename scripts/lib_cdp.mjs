@@ -1,20 +1,57 @@
 // Chrome headless を DevTools Protocol で直接操作する最小ヘルパー（追加依存なし・Node 22+ の標準 WebSocket を使う）。
 // measure_deck.mjs / html_dump.mjs から使う。
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { mkdtempSync, rmSync, existsSync, readdirSync, statSync, accessSync, constants } from "node:fs";
+import { tmpdir, homedir } from "node:os";
+import { join, resolve, delimiter } from "node:path";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 
+// ブラウザの探し方は scripts/find_browser.py と同じ: CHROME_PATH → Playwright の headless shell → Chrome 本体・Chromium
+export function findBrowser() {
+  if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
+  const roots = [process.env.PLAYWRIGHT_BROWSERS_PATH, join(homedir(), "Library", "Caches", "ms-playwright"),
+    join(homedir(), ".cache", "ms-playwright"), process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, "ms-playwright")].filter((x) => x && x !== "0");
+  const shells = [];
+  for (const r of roots) {
+    let dirs = [];
+    try { dirs = readdirSync(r).filter((d) => d.startsWith("chromium_headless_shell-")); } catch { continue; }
+    for (const d of dirs) {
+      let subs = [];
+      try { subs = readdirSync(join(r, d)); } catch { continue; }
+      for (const sub of subs) for (const exe of ["chrome-headless-shell", "chrome-headless-shell.exe", "headless_shell"]) {
+        const p = join(r, d, sub, exe);
+        if (existsSync(p)) shells.push({ p, v: Number(d.split("-")[1]) || 0 });
+      }
+    }
+  }
+  if (shells.length) return shells.sort((a, b) => b.v - a.v)[0].p;
+  // find_browser.py の CHROME_CANDIDATES と同じ順。絶対パスはそのまま、名前だけのものは PATH から探す（shutil.which 相当）
+  for (const c of ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "C:/Program Files/Google/Chrome/Application/chrome.exe", "google-chrome", "google-chrome-stable", "chromium", "chromium-browser"]) {
+    if (existsSync(c)) return c;
+    const w = which(c);
+    if (w) return w;
+  }
+  return undefined;
+}
+
+function which(name) {
+  if (name.includes("/") || name.includes("\\")) return null;
+  const exts = process.platform === "win32" ? (process.env.PATHEXT || ".EXE").split(";") : [""];
+  for (const dir of (process.env.PATH || "").split(delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      const p = join(dir, name + ext);
+      try { if (statSync(p).isFile()) { accessSync(p, constants.X_OK); return p; } } catch {}
+    }
+  }
+  return null;
+}
+
 export async function openPage(file, { width = 1400, height = 900, scale = 1, media = "print" } = {}) {
-  const CHROME = process.env.CHROME_PATH || [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    "C:/Program Files/Google/Chrome/Application/chrome.exe",
-    "/usr/bin/google-chrome", "/usr/bin/chromium",
-  ].find(existsSync);
-  if (!CHROME) throw new Error("Chrome が見つからない（CHROME_PATH で指定可）");
+  const CHROME = findBrowser();
+  if (!CHROME) throw new Error("ブラウザが見つからない（`npm run setup` で headless shell を入れるか、CHROME_PATH で指定する）");
 
   const userDataDir = mkdtempSync(join(tmpdir(), "chr-deck-"));
   const port = 9222 + Math.floor(Math.random() * 1000);

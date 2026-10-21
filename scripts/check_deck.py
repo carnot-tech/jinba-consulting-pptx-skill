@@ -243,7 +243,7 @@ def check_number_consistency(pages):
 # タイトルだけでなく本文・表・カードに「Text N」「ラベル N」「YYYY」「パーツNN｜」が残っていたら FAIL。
 # 型名をそのままタイトルにしたページ（例:「軸のある表」）も FAIL。
 BODY_PLACEHOLDER = re.compile(
-    r"Text\s*\d+|ラベル\s*\d+|タイトル\s*\d+|Source\s*\d+|YYYY|パーツ\s*\d+\s*[｜|]|ダミー|^会社名$|^連絡先$")
+    r"Text\s*\d+|ラベル\s*\d+|タイトル\s*\d+|Source\s*\d+|YYYY|XXX|ＸＸＸ|○○|〇〇|●●|△△|\bTBD\b|Lorem|パーツ\s*\d+\s*[｜|]|ダミー|^会社名$|^連絡先$")
 
 
 def _part_type_names():
@@ -328,7 +328,7 @@ def check_shape_runs(shapes):
             run.append(i)
             continue
         if len(run) >= 3:
-            warn(f"p{run[0]}〜p{run[-1]}: {shapes[run[0]-1]}のページが{len(run)}枚続く（§4.96: 比較・流れ・因果・位置づけのどれを見せるかを問い直す。意図した連番なら無視してよい）")
+            warn(f"p{run[0]}〜p{run[-1]}: {shapes[run[0]-1]}のページが{len(run)}枚続く（§4.96: 比較・流れ・因果・位置づけのどれを見せるかを問い直し、形を変える。同じ型の比較を続けて見せるのが目的のときだけ残し、理由を qa.md に書く）")
         run = [i] if sh else []
 
 
@@ -400,6 +400,18 @@ def check_title(idx, title, explicit_break=False, closing=False):
     if not t:
         warn(f"p{idx}: タイトルが空（表紙/扉なら可）")
         return
+    if re.search(r"(\d+|[一二三四五六七八九十]+)(つ|点|観点|方向|段階|要素|領域|論点|問い)(に|で|へ)?(を)?(整理|分解|分け|まとめ|分類|束ね)(する|る|た)?$|順に見る$", t):
+        warn(f"p{idx}: タイトルが作業の説明になっている（「〜に分ける」「〜で整理する」は作り手の手順。分けた結果、何が言えるかを書く — §2.12・§2.19）: 「{t}」")
+    elif re.search(r"を(一覧に|一覧化)(する|した)$", t):
+        fail(f"p{idx}: タイトルが作業の説明で終わっている（「〜を一覧にする」は作り手の手順。並べた結果、何が言えるかを主張で書く — §2.12・§2.19）: 「{t}」")
+    elif re.search(r"(ごとに|別に|・).*を(整理(する|した)|まとめる|まとめた)$", t):
+        # 「打ち手ごとに担当・時期・効果を整理する」: 項目を並べて整理する＝資料の作業の説明
+        fail(f"p{idx}: タイトルが作業の説明で終わっている（「〜ごとに…を整理する」は作り手の手順。整理した結果、何が言えるかを主張で書く — §2.12・§2.19）: 「{t}」")
+    elif re.search(r"を整理(する|した)$|を(まとめる|まとめた)$", t):
+        # 「承認フローを整理する」「重複した窓口をまとめる」のように打ち手の言い切りでもあり得るので WARN（上の「3つに整理する」と揃える）
+        warn(f"p{idx}: タイトルが「〜を整理する」「〜をまとめる」で終わっている（資料の作業の説明なら、整理した結果、何が言えるかを書く。打ち手として何をどうするかを言い切っているなら残してよい — §2.12・§2.19）: 「{t}」")
+    elif re.search(r"を(示す|説明する|紹介する)$|について(述べる|説明する)$", t):
+        warn(f"p{idx}: タイトルが作業の説明で終わっている（「〜を示す」は何を見せるかの説明。見せた結果、何が言えるかを書く — §2.12）: 「{t}」")
     if not closing and re.search(r"(です|ます|でした|ました)[。．.]?$", t):
         fail(f"p{idx}: タイトルがですます調 → 体言止めに: 「{t}」")
     # タイトルは PPTX/HTML とも2行まで許容。1行目安(TITLE_MAX=40字)超は WARN、2行にも収まらない長さ(>80字)だけ FAIL。
@@ -423,6 +435,23 @@ def check_title(idx, title, explicit_break=False, closing=False):
 
 
 # テンプレの見本タイトルは「形の参考」であって埋める鋳型ではない（slide-rules §2.8）。同じ文型が並んだら WARN。
+# 「第2段階」のような序数は数で束ねた形ではないので外す
+COUNT_GROUP = re.compile(r"(?<![\d.第])([2-9２-９]|[二三四五六])\s*(つの|つに|本の|本柱|点の|点に|領域|つ$|本$|点$)")
+# 「3点を承認いただく」「2段階で進める」は数を材料として言っているだけのことも多い。束ねた形の候補として WARN の数にだけ入れる
+COUNT_SOFT = re.compile(r"(?<![\d.第])([2-9２-９]|[二三四五六])\s*(点を|段階)")
+
+
+def check_count_titles(titles):
+    """§2.4・§4.103: 数で束ねたタイトル（「3つの壁」「3本柱」「3点の承認」）が3枚以上なら FAIL。型が透けて見える"""
+    hits = [t for t in titles if t and COUNT_GROUP.search(t)]
+    soft = [t for t in titles if t and t not in hits and COUNT_SOFT.search(t)]
+    msg = "（§4.103: 数でなく中身をタイトルに書く。「3本柱で進める」→柱の名前で言う。数は材料で決め、3つに揃えない）"
+    if len(hits) >= 3:
+        fail(f"数で束ねたタイトルが {len(hits)} 枚: 「{hits[0][:24]}」ほか{msg}")
+    elif len(hits) + len(soft) >= 3:
+        warn(f"数を前に出したタイトルが {len(hits) + len(soft)} 枚: 「{(hits + soft)[0][:24]}」ほか{msg}")
+
+
 def check_title_variety(titles):
     real = [t.strip() for t in titles if t and t.strip()]
     if len(real) < 5:
@@ -707,6 +736,45 @@ def check_garbled(idx, text):
         fail(f"p{idx}: 文字化けの痕 ×{len(hits)}（{' '.join(cps[:4])}）（元の文字に打ち直す。編集画面での並べ替え・変換のあとに起きやすい）")
 
 
+FRAMEWORK_NAME = re.compile(r"(Situation|Complication|Resolution|So What\??|Why So\??|MECE|SCR|Issue|Key Takeaways?)", re.I)
+JA = r"[\u3040-\u30ff\u4e00-\u9fff]"
+HALF_COMMA = re.compile(JA + r",\s?" + JA)
+
+
+DASH_LINK = re.compile(r"\S ?[—―─━]{1,2} ?\S")  # 全角ダッシュ・水平線・罫線の文字でのつなぎ（空白は _leaf_texts で1つに正規化済み）
+
+
+def check_dash_link(idx, leaves):
+    """§7.1: 「 — 」でつながない（AI 臭の典型）。非該当セルの「—」単独は可。
+    ブロック要素ごとの文章塊で見るので、タグの組み方や空白の数で判定が変わらない"""
+    for text in leaves:
+        m = DASH_LINK.search(text)
+        if m:
+            fail(f"p{idx}: 「—」で語句をつないでいる「{text[max(0, m.start() - 10):m.end() + 10].strip()}」（句点・「：」・括弧で区切る。§7.1）")
+            return
+
+
+def check_framework_and_commas(idx, leaves, vis):
+    """§7.32: 英語の思考の枠組みの名前（Situation／Complication／Resolution 等）を見出し・列名に書かない。
+    日本語の文の中の半角カンマは読点「、」にする"""
+    hit = [x for x in leaves if FRAMEWORK_NAME.fullmatch(x.strip())]
+    if hit:
+        fail(f"p{idx}: 思考の枠組みの名前「{hit[0]}」が見出し・列名に出ている（作り手の道具。「これまで／課題／対策」のように中身の言葉にする — §7.32）")
+    m = HALF_COMMA.search(vis)
+    if m:
+        warn(f"p{idx}: 日本語の文の中に半角カンマ「{m.group(0)}」（読点「、」にする）")
+
+
+WORK_FILES = re.compile(r"(?<![A-Za-z0-9_])(sources|qa|REPORT)\.md(?![A-Za-z0-9_])")  # 日本語に直接続く「のsources.md」も拾う
+
+
+def check_work_files(idx, text):
+    """§2.23: 読み手は作り手の控え（sources.md・qa.md）を見ない。デッキの注でそこを根拠として指さない"""
+    m = WORK_FILES.search(text)
+    if m:
+        fail(f"p{idx}: 作り手の控えのファイル名「{m.group(0)}」がデッキに出ている（読み手は見ない。試算の前提と算式・出典は、そのページの注か付録に書く — §2.23）")
+
+
 class _ListCounter(HTMLParser):
     """ul/ol ごとに直下の li の数を数える（入れ子も別々に数える）"""
     def __init__(self):
@@ -766,6 +834,26 @@ def page_number(fragment):
     m = re.search(r'<div class="foot">.*?<span>\s*(\d+)\s*</span>', fragment, re.S) or \
         re.search(r'<footer class="footer">(?:(?!</footer>).)*<span>\s*(\d+)\s*</span>\s*</footer>', fragment, re.S)
     return int(m.group(1)) if m else None
+
+
+def _part_type_ids():
+    """追加パーツ集の英語の型ID（右上ラベル「05  chart_insight」の chart_insight）。テンプレが無い環境では空。"""
+    fp = Path(__file__).resolve().parent.parent / "templates" / "freeform_parts_more_16x9.html"
+    if not fp.exists():
+        return set()
+    return set(re.findall(r'class="kicker">\s*\d{2}\s+([a-z][a-z0-9_]*)\s*<', fp.read_text(encoding="utf8", errors="ignore")))
+
+
+_TYPE_IDS = _part_type_ids()
+# パーツ集にある型IDだけを見る（表の「05」「user_id」のような列の並びを型IDと取り違えない）
+TYPE_ID = re.compile(r"(?<![\w/.])\d{2}\s+(?:" + "|".join(sorted(map(re.escape, _TYPE_IDS), key=len, reverse=True)) + r")(?![\w.])") if _TYPE_IDS else None
+
+
+def check_type_id(idx, text):
+    """パーツの英語の型ID（「05 chart_insight」など）が右上のラベルや本文に残っていないか"""
+    m = TYPE_ID.search(text) if TYPE_ID else None
+    if m:
+        fail(f"p{idx}: パーツの型ID「{m.group(0)}」が残っている（右上のラベルはそのページの話題を日本語で書く。§4.13）")
 
 
 def check_page_numbers(nums):
@@ -878,13 +966,14 @@ def check_html(path):
     # タイトル抽出
     titles = []
     shapes = []
-    pat = r'<(?:section|div)[^>]*class="(?:[^"]*\bslide\b[^"]*|s|s [^"]*)"[^>]*>'
-    parts = re.split(pat, html)
-    slides = parts[1:] if len(parts) > 1 else []
-    slide_classes = re.findall(pat.replace('class="(?:', 'class="((?:', 1).replace(')"[^>]*>', '))"[^>]*>', 1), html)
+    slides, slide_classes = _slides(html)
     nums, heads = [], []
     for i, s in enumerate(slides, 1):
-        check_garbled(i, re.sub(r"<[^>]+>", " ", re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", s, flags=re.S)))
+        vis = _visible(s)
+        check_garbled(i, vis)
+        check_work_files(i, vis)
+        if not TEMPLATE_MODE:
+            check_type_id(i, vis)
         m = re.search(r"<h1[^>]*>(.*?)</h1>", s, re.S) or re.search(r'class="[^"]*\b(?:ttl|title|msg)\b[^"]*"[^>]*>(.*?)</', s, re.S)
         raw_t = m.group(1) if m else ""
         t = re.sub(r"<[^>]+>", "", raw_t).strip()
@@ -892,6 +981,13 @@ def check_html(path):
         titles.append(t)
         cls = (slide_classes[i - 1] if i - 1 < len(slide_classes) else "").split()
         nums.append((i, page_number(s)))
+        # 最終ページは、cover/back の印が無くても、タイトルが無いか締めのあいさつだけのときに限って裏表紙とみなす
+        # （裏表紙の無いデッキの最終ページの比較表の「当社」を見本の文言と取り違えない）
+        is_back = "back" in cls or (i == len(slides) and (not t or bool(CLOSING_TITLE.search(t))))
+        if not TEMPLATE_MODE and ("cover" in cls or is_back):
+            left = [x for x in _leaf_texts(s) if re.fullmatch(r"当社|会社名|連絡先|お問い合わせ\s*当社|資料名|担当者名|表紙|裏表紙|章扉", x)]
+            if left:
+                fail(f"p{i}: 表紙・裏表紙に見本の文言が残っている「{left[0]}」（作成者・連絡先は実物にし、「表紙」のような型の名前のラベルは消す）")
         edge = bool({"cover", "chap", "back"} & set(cls))
         if "std" in cls:
             # 正本から差し込んだ定型ページ（§4.99）は文章・版面の検査を飛ばす
@@ -907,6 +1003,8 @@ def check_html(path):
         check_count_match(i, t, re.sub(r"<[^>]+>", " ", s))
         leaves = _leaf_texts(s)
         check_body_placeholders(i, leaves, t)
+        check_framework_and_commas(i, leaves, vis)
+        check_dash_link(i, leaves)
         check_exec_summary(i, t, s)
         if "cover" not in cls:
             check_multi_sentence(i, leaves)
@@ -940,6 +1038,64 @@ def check_html(path):
     return titles
 
 
+NUM_FACT = re.compile(r"(?<![\d.,])(\d{1,3}(?:[,，]\d{3})+|\d+(?:\.\d+)?)\s*(%|％|ポイント|倍|億円|万円|千円|円|億|万|件|人|社|時間|ドル)")
+
+
+def _norm_num(x):
+    return x.replace(",", "").replace("，", "")
+
+
+SRC_NUM = re.compile(r"(?<![\d.])\d+(?:\.\d+)?(?![\d])")
+
+
+def _src_numbers(text):
+    """sources.md の数字を、前後が数字でない境界で切り出した集合にする（部分一致で「2025」が「5」を通さないように）。
+    桁区切りのカンマは外し、小数の末尾の 0 は落とした形も入れる（12.50 ↔ 12.5）"""
+    text = re.sub(r"(?<=\d)[,，](?=\d{3}(?!\d))", "", text)
+    out = set()
+    for t in SRC_NUM.findall(text):
+        out.add(t)
+        if "." in t:
+            out.add(t.rstrip("0").rstrip("."))
+    return out
+
+
+SLIDE_OPEN = re.compile(r'<(?:section|div)[^>]*class="((?:[^"]*\bslide\b[^"]*|s|s [^"]*))"[^>]*>')
+
+
+def _slides(html):
+    """スライドの区切り。(各スライドの断片のリスト, 各スライドの class のリスト) を返す。
+    スライドを数える検査はすべてこれを使い、ページ番号がずれないようにする"""
+    parts = SLIDE_OPEN.split(html)
+    # キャプチャした class も返るので [前置き, class1, 断片1, class2, 断片2, ...] になる
+    return parts[2::2], parts[1::2]
+
+
+def _visible(frag):
+    """script・style・コメントを除いた見える文字（タグは空白に置き換える）"""
+    return re.sub(r"<[^>]+>", " ", re.sub(r"<(script|style)[^>]*>.*?</\1>|<!--.*?-->", " ", frag, flags=re.S))
+
+
+def check_sources(html_path, sources_path):
+    """数字の出典の控え（sources.md）と照合する。デッキに出てくる数字（単位つき）が控えに無ければ WARN（SKILL.md 手順2）"""
+    sp = Path(sources_path)
+    if not sp.exists():
+        fail(f"出典の控え {sources_path} が無い（SKILL.md 手順2: 数字は調べて控えてから使う）")
+        return
+    src = _src_numbers(sp.read_text(encoding="utf8", errors="ignore"))
+    html = Path(html_path).read_text(encoding="utf8", errors="ignore")
+    missing = []
+    for i, frag in enumerate(_slides(html)[0], 1):
+        vis = _visible(frag)
+        for m in NUM_FACT.finditer(vis):
+            n = _norm_num(m.group(1))
+            if n not in src and (n.rstrip("0").rstrip(".") if "." in n else n) not in src:
+                missing.append(f"p{i}「{m.group(0).strip()}」")
+    if missing:
+        uniq = list(dict.fromkeys(missing))
+        warn(f"出典の控えに無い数字 ×{len(uniq)}: {' / '.join(uniq[:8])}（{sources_path} に出典を控えるか、試算なら前提と算式を書く。見つからない数字は「要確認」に — §2.23）")
+
+
 def main():
     global TEMPLATE_MODE
     args = sys.argv[1:]
@@ -959,6 +1115,11 @@ def main():
         k = args.index("--forbid")
         FORBIDDEN_TERMS = load_forbidden(args[k + 1])
         del args[k:k + 2]
+    sources = None
+    if "--sources" in args:
+        k = args.index("--sources")
+        sources = args[k + 1]
+        del args[k:k + 2]
     PART_TYPE_NAMES = _part_type_names()
     if not args:
         sys.exit(__doc__)
@@ -966,6 +1127,9 @@ def main():
     titles = check_pptx(p) if p.lower().endswith((".pptx", ".potx")) else check_html(p)
     if not TEMPLATE_MODE:
         check_title_variety(titles)
+        check_count_titles(titles)
+    if sources and not p.lower().endswith((".pptx", ".potx")):
+        check_sources(p, sources)
     print("=== タイトル一覧（上から通し読みしてストーリーが繋がるか確認） ===")
     for i, t in enumerate(titles, 1):
         print(f"{i:>3}  {t or '(なし)'}")
