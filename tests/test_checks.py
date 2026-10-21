@@ -732,6 +732,36 @@ class StructureF(unittest.TestCase):
             r = subprocess.run([sys.executable, str(CHECK), str(deck), "--sources", str(src)], capture_output=True, text=True)
         self.assertIn("出典の控えに無い数字", r.stdout)
 
+    def test_sources_match_is_not_substring(self):
+        # 控えの「2025」が本文の「5万人」「20倍」を通さない（数字は前後が数字でない境界で照合する）
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "sources.md"
+            src.write_text("# 出典\n- 2025年 社内集計\n", encoding="utf8")
+            deck = Path(d) / "deck.html"
+            deck.write_text(inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "利用者は5万人、処理は20倍に増える"), encoding="utf8")
+            r = subprocess.run([sys.executable, str(CHECK), str(deck), "--sources", str(src)], capture_output=True, text=True)
+        line = next((l for l in r.stdout.splitlines() if "出典の控えに無い数字" in l), "")
+        self.assertIn("「5万」", line)
+        self.assertIn("「20倍」", line)
+
+    def test_sources_match_with_thousands_separator(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "sources.md"
+            src.write_text("# 出典\n- 12,000件 社内集計\n", encoding="utf8")
+            deck = Path(d) / "deck.html"
+            deck.write_text(inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "申請は年12000件に達する"), encoding="utf8")
+            r = subprocess.run([sys.executable, str(CHECK), str(deck), "--sources", str(src)], capture_output=True, text=True)
+        self.assertNotIn("「12000件」", r.stdout)
+
+    def test_check_all_fails_when_a_checker_crashes(self):
+        # check_deck が途中で落ちたら（ここでは無いファイル）、0 FAIL として通さず非0で終わる
+        with tempfile.TemporaryDirectory() as d:
+            r = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_all.py"), str(Path(d) / "nope.html")],
+                               capture_output=True, text=True, cwd=d)
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("最後まで動いていない", r.stderr)
+        self.assertNotIn("0 FAIL", r.stdout)
+
     def test_sources_file_required(self):
         with tempfile.TemporaryDirectory() as d:
             deck = Path(d) / "deck.html"
@@ -791,7 +821,7 @@ class LayoutFeedback20261020(LayoutFeedback20261012):
 
 
 class MetaTitle(unittest.TestCase):
-    """check_deck：作業の説明のタイトル（「〜を3つに分ける」「〜を示す」は WARN、「〜を整理する」「〜をまとめる」で終わると FAIL）"""
+    """check_deck：作業の説明のタイトル（「〜を3つに分ける」「〜を示す」「〜を整理する」は WARN、「〜ごとに…を整理する」「〜を一覧にする」は FAIL）"""
 
     def test_meta_title_warns(self):
         html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "承認が遅れる理由を3つに分ける")
@@ -803,6 +833,13 @@ class MetaTitle(unittest.TestCase):
     def test_seiri_ending_fails(self):
         html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "打ち手ごとに担当・時期・効果を整理する")
         self.assertTrue(any("作業の説明で終わっている" in l for l in run(html)[1]))
+
+    def test_action_with_seiri_ending_is_warn_not_fail(self):
+        # 打ち手の言い切り（「承認フローを整理する」「重複した窓口をまとめる」）は FAIL にしない
+        for t in ("承認フローを整理する", "重複した窓口をまとめる"):
+            html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", t)
+            self.assertFalse(any("作業の説明" in l for l in run(html)[1]), t)
+            self.assertTrue(any("で終わっている" in l for l in warns(html)), t)
 
     def test_shimesu_ending_warns(self):
         html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "承認待ちの日数の推移を示す")
@@ -846,6 +883,14 @@ class DashAndPlaceholders(unittest.TestCase):
         html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "業務自動化 — 承認待ちを当日に縮める")
         self.assertTrue(any("「—」で語句をつないでいる" in l for l in run(html)[1]))
 
+    def test_dash_link_does_not_depend_on_spaces(self):
+        # 空白の数やタグの組み方で結果が変わらない: 文中のつなぎは空白がいくつでも FAIL、セル単独の「—」は空白が重なっても可
+        for body in ("<p>前年比  —  横ばい</p>", "<p>前年比<span> — </span>横ばい</p>"):
+            html = GOOD.replace("差し戻しの6割は添付漏れ", "差し戻しの6割は添付漏れ" + body, 1)
+            self.assertTrue(any("「—」で語句をつないでいる" in l for l in run(html)[1]), body)
+        html = GOOD.replace("差し戻しの6割は添付漏れ", "差し戻しの6割は添付漏れ<table><tr><td>前年比</td><td>   —   </td></tr></table>", 1)
+        self.assertFalse(any("「—」で語句をつないでいる" in l for l in run(html)[1]))
+
     def test_placeholder_xxxx_fails(self):
         html = GOOD.replace("差し戻しの6割は添付漏れ", "差し戻しの6割は添付漏れ（内線 XXXX）", 1)
         self.assertTrue(any("プレースホルダー" in l for l in run(html)[1]))
@@ -868,6 +913,61 @@ class CoverPlaceholder(unittest.TestCase):
 
     def test_good_deck_cover_passes(self):
         self.assertFalse(any("見本の文言" in l for l in run(GOOD)[1]))
+
+    def test_last_content_page_is_not_back_cover(self):
+        # 裏表紙の無いデッキの最終ページの比較表「当社 / 競合A」は見本の文言ではない
+        page = ('<section class="s"><h1>当社は導入の速さで競合を上回る</h1><table><tr><th>当社</th><th>競合A</th></tr>'
+                '<tr><td>2週間</td><td>3か月</td></tr></table><div class="foot"><span>9</span></div></section>')
+        last = GOOD.rfind('<section class="s cover">')
+        html = GOOD[:last] + page + "</body></html>"
+        self.assertFalse(any("見本の文言" in l for l in run(html)[1]))
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class LayoutReview20261021(LayoutFeedback20261012):
+    """check_layout：レビューの指摘（PR #39）の再現"""
+
+    def run_layout(self, html):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "deck.html"
+            p.write_text(html, encoding="utf8")
+            r = subprocess.run(["node", str(ROOT / "scripts" / "check_layout.mjs"), str(p)],
+                               capture_output=True, text=True, cwd=ROOT, encoding="utf8")
+        return r.stdout
+
+    def test_label_and_bar_list_is_not_stretched(self):
+        # ラベル＋塗りのバー（文字なし div）の縦並びは、バーの高さを空きに数えない
+        row = '<div><div style="font-size:12px">{t}</div><div style="height:40px;background:#8a5a3c"></div></div>'
+        body = '<div style="width:600px">' + "".join(row.format(t=t) for t in ("東日本", "西日本", "九州")) + "</div>"
+        self.assertFalse(any("並べた項目の間" in l for l in self.layout(body)))
+        flat = ('<div style="width:600px">' + "".join(f'<div style="font-size:12px">{t}</div><div style="height:40px;background:#8a5a3c"></div>'
+                                                      for t in ("東日本", "西日本", "九州")) + "</div>")
+        self.assertFalse(any("並べた項目の間" in l for l in self.layout(flat)))
+
+    def test_white_rules_on_dark_background_are_compared(self):
+        # 濃色の背景の白い区切り線の太さの不揃いは検出する（白を一律に外さない）
+        body = ('<div style="background:#3b2a20;padding:20px;height:300px">'
+                '<div class="sep" style="border-top:1px solid #fff;color:#fff">申請</div>'
+                '<div class="sep" style="border-top:3px solid #fff;color:#fff">承認</div></div>')
+        out = self.run_layout(GOOD.replace("</body>", f'<section class="s"><h1>検査の見本として置いたページのタイトル</h1>{body}'
+                                                       '<div class="foot"><span>9</span></div></section></body>', 1))
+        self.assertIn("div.sep:top", out)
+
+    def test_zoom_hint_checks_right_edge(self):
+        # 列幅を mm で固定した表は、拡大すると右端を越える。文字の下端だけで「はみ出しなし」と勧めず、拡大では直らないと言う
+        body = '<div class="c"><table style="table-layout:fixed;width:310mm"><tr><td>申請</td><td>承認</td></tr></table></div>'
+        line = next((l for l in self.layout(body) if "が空いている" in l), "")
+        self.assertIn("1.05倍にするだけで版面からはみ出す", line)
+        self.assertNotIn("zoom:", line)
+
+    def test_div_slide_deck_pdf_pages_are_compared(self):
+        # <div class="slide"> のデッキでも PDF のページ数の照合が動く（メイン検査と同じセレクタ）
+        page = ('<div class="slide" style="width:338.67mm;height:190.5mm;page-break-after:always;overflow:hidden">'
+                '<h1>{t}</h1><p>本文</p></div>')
+        html = ('<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>@page{size:338.67mm 190.5mm;margin:0}'
+                'body{margin:0}</style></head><body>' + page.format(t="一枚目のタイトル") + page.format(t="二枚目のタイトル")
+                + '<div class="slide" style="width:338.67mm;height:400mm"><h1>高すぎる三枚目</h1></div></body></html>')
+        self.assertIn("PDF が", self.run_layout(html))
 
 
 @unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
@@ -936,8 +1036,16 @@ class CountTitles(unittest.TestCase):
         for old, new in (("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "承認の遅れは3つの壁で起きている"),):
             html = html.replace(old, new, 1)
         html = html.replace("</body>", "".join(f'<section class="s"><h1>{t}</h1><div class="foot"><span>9</span></div></section>'
-                                                for t in ("来期は3本柱で進める", "本日は3点を承認いただきたい")) + "</body>", 1)
+                                                for t in ("来期は3本柱で進める", "論点は2点に絞られる")) + "</body>", 1)
         self.assertTrue(any("数で束ねたタイトル" in l for l in run(html)[1]))
+
+    def test_ordinal_and_soft_counts_do_not_fail(self):
+        # 「第2段階」は序数、「3点を承認いただく」「2段階で進める」は数を材料に言っているだけのこともある → FAIL にしない（WARN 止まり）
+        html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "第2段階で全社展開に進む")
+        html = html.replace("</body>", "".join(f'<section class="s"><h1>{t}</h1><div class="foot"><span>9</span></div></section>'
+                                                for t in ("本日は3点を承認いただく", "導入は2段階で進める", "承認の遅れは3つの壁で起きている")) + "</body>", 1)
+        self.assertFalse(any("数で束ねたタイトル" in l for l in run(html)[1]))
+        self.assertTrue(any("数を前に出したタイトル" in l for l in warns(html)))
 
     def test_good_deck_passes(self):
         self.assertFalse(any("数で束ねたタイトル" in l for l in run(GOOD)[1] + warns(GOOD)))

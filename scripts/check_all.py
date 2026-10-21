@@ -6,7 +6,8 @@
   python3 scripts/check_all.py mydeck.html --sources sources.md
 
 出力は「全体の指摘」→「ページごとの指摘（FAIL を先に）」→ タイトル一覧。指摘の § は rules.py --sec で引ける。
-終了コードは FAIL があれば 1。
+終了コードは FAIL があれば 1。どちらかの検査が途中で落ちた（node が無い・playwright が無い・Traceback など）ときは
+エラー出力を見せて 2 で終わる（指摘0件として通さない）。
 """
 import os
 import re
@@ -16,6 +17,23 @@ from collections import OrderedDict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+# 各検査が最後まで走ったときにだけ出す締めの行。これが無い／終了コードが合わない＝途中で落ちた
+DONE = {
+    "check_deck.py": (re.compile(r"^\d+ FAIL / \d+ WARN$", re.M), (0, 1)),
+    "check_layout.mjs": (re.compile(r"^(\d+ layout FAIL|layout OK)", re.M), (0, 1)),
+}
+
+
+def run(cmd):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True)
+    except FileNotFoundError as e:
+        return subprocess.CompletedProcess(cmd, 127, "", f"{cmd[0]} が見つからない（PATH を確認）: {e}")
+
+
+def finished(name, p):
+    pat, codes = DONE[name]
+    return p.returncode in codes and bool(pat.search(p.stdout or ""))
 
 
 def main():
@@ -32,8 +50,14 @@ def main():
                 sources = str(cand)
                 break
     cd_cmd = [sys.executable, str(HERE / "check_deck.py"), deck] + (["--sources", sources] if sources else [])
-    cd = subprocess.run(cd_cmd, capture_output=True, text=True)
-    cl = subprocess.run(["node", str(HERE / "check_layout.mjs"), deck], capture_output=True, text=True)
+    cd = run(cd_cmd)
+    cl = run(["node", str(HERE / "check_layout.mjs"), deck])
+    broken = [(name, p) for name, p in (("check_deck.py", cd), ("check_layout.mjs", cl)) if not finished(name, p)]
+    for name, p in broken:
+        print(f"{name} が最後まで動いていない（終了コード {p.returncode}）。この結果は使えない:", file=sys.stderr)
+        print("  " + ((p.stderr or "").strip()[-800:] or "（エラー出力なし）").replace("\n", "\n  "), file=sys.stderr)
+    if broken:
+        sys.exit(2)
     lines = [l for l in (cd.stdout + "\n" + cl.stdout).splitlines() if l.startswith(("FAIL", "WARN"))]
     titles = cd.stdout.split("=== タイトル一覧", 1)[1].split("\n\n", 1)[0] if "=== タイトル一覧" in cd.stdout else ""
     pages, glob = OrderedDict(), []
@@ -46,8 +70,6 @@ def main():
             glob.append((kind, msg))
     nf = sum(1 for l in lines if l.startswith("FAIL"))
     nw = len(lines) - nf
-    if cl.returncode not in (0, 1) and not cl.stdout.strip():
-        print("check_layout.mjs を実行できない（playwright が無い）: " + (cl.stderr.strip()[:300] or "原因不明"))
     if glob:
         print("== デッキ全体")
         for k, m in sorted(glob, key=lambda x: x[0] != "FAIL"):

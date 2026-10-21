@@ -402,8 +402,14 @@ def check_title(idx, title, explicit_break=False, closing=False):
         return
     if re.search(r"(\d+|[一二三四五六七八九十]+)(つ|点|観点|方向|段階|要素|領域|論点|問い)(に|で|へ)?(を)?(整理|分解|分け|まとめ|分類|束ね)(する|る|た)?$|順に見る$", t):
         warn(f"p{idx}: タイトルが作業の説明になっている（「〜に分ける」「〜で整理する」は作り手の手順。分けた結果、何が言えるかを書く — §2.12・§2.19）: 「{t}」")
-    elif re.search(r"を(整理|一覧に|一覧化)(する|した)$|を(まとめる|まとめた)$", t):
-        fail(f"p{idx}: タイトルが作業の説明で終わっている（「〜を整理する」「〜をまとめる」は作り手の手順。整理した結果、何が言えるかを主張で書く — §2.12・§2.19）: 「{t}」")
+    elif re.search(r"を(一覧に|一覧化)(する|した)$", t):
+        fail(f"p{idx}: タイトルが作業の説明で終わっている（「〜を一覧にする」は作り手の手順。並べた結果、何が言えるかを主張で書く — §2.12・§2.19）: 「{t}」")
+    elif re.search(r"(ごとに|別に|・).*を(整理(する|した)|まとめる|まとめた)$", t):
+        # 「打ち手ごとに担当・時期・効果を整理する」: 項目を並べて整理する＝資料の作業の説明
+        fail(f"p{idx}: タイトルが作業の説明で終わっている（「〜ごとに…を整理する」は作り手の手順。整理した結果、何が言えるかを主張で書く — §2.12・§2.19）: 「{t}」")
+    elif re.search(r"を整理(する|した)$|を(まとめる|まとめた)$", t):
+        # 「承認フローを整理する」「重複した窓口をまとめる」のように打ち手の言い切りでもあり得るので WARN（上の「3つに整理する」と揃える）
+        warn(f"p{idx}: タイトルが「〜を整理する」「〜をまとめる」で終わっている（資料の作業の説明なら、整理した結果、何が言えるかを書く。打ち手として何をどうするかを言い切っているなら残してよい — §2.12・§2.19）: 「{t}」")
     elif re.search(r"を(示す|説明する|紹介する)$|について(述べる|説明する)$", t):
         warn(f"p{idx}: タイトルが作業の説明で終わっている（「〜を示す」は何を見せるかの説明。見せた結果、何が言えるかを書く — §2.12）: 「{t}」")
     if not closing and re.search(r"(です|ます|でした|ました)[。．.]?$", t):
@@ -429,14 +435,21 @@ def check_title(idx, title, explicit_break=False, closing=False):
 
 
 # テンプレの見本タイトルは「形の参考」であって埋める鋳型ではない（slide-rules §2.8）。同じ文型が並んだら WARN。
-COUNT_GROUP = re.compile(r"(?<![\d.])([2-9２-９]|[二三四五六])\s*(つの|つに|本の|本柱|点の|点を|点に|領域|段階|つ$|本$|点$)")
+# 「第2段階」のような序数は数で束ねた形ではないので外す
+COUNT_GROUP = re.compile(r"(?<![\d.第])([2-9２-９]|[二三四五六])\s*(つの|つに|本の|本柱|点の|点に|領域|つ$|本$|点$)")
+# 「3点を承認いただく」「2段階で進める」は数を材料として言っているだけのことも多い。束ねた形の候補として WARN の数にだけ入れる
+COUNT_SOFT = re.compile(r"(?<![\d.第])([2-9２-９]|[二三四五六])\s*(点を|段階)")
 
 
 def check_count_titles(titles):
     """§2.4・§4.103: 数で束ねたタイトル（「3つの壁」「3本柱」「3点の承認」）が3枚以上なら FAIL。型が透けて見える"""
     hits = [t for t in titles if t and COUNT_GROUP.search(t)]
+    soft = [t for t in titles if t and t not in hits and COUNT_SOFT.search(t)]
+    msg = "（§4.103: 数でなく中身をタイトルに書く。「3本柱で進める」→柱の名前で言う。数は材料で決め、3つに揃えない）"
     if len(hits) >= 3:
-        fail(f"数で束ねたタイトルが {len(hits)} 枚: 「{hits[0][:24]}」ほか（§4.103: 数でなく中身をタイトルに書く。「3本柱で進める」→柱の名前で言う。数は材料で決め、3つに揃えない）")
+        fail(f"数で束ねたタイトルが {len(hits)} 枚: 「{hits[0][:24]}」ほか{msg}")
+    elif len(hits) + len(soft) >= 3:
+        warn(f"数を前に出したタイトルが {len(hits) + len(soft)} 枚: 「{(hits + soft)[0][:24]}」ほか{msg}")
 
 
 def check_title_variety(titles):
@@ -728,14 +741,17 @@ JA = r"[\u3040-\u30ff\u4e00-\u9fff]"
 HALF_COMMA = re.compile(JA + r",\s?" + JA)
 
 
-DASH_LINK = re.compile(r"\S\s?[—―─━]{1,2}\s?\S")  # 全角ダッシュ・水平線・罫線の文字でのつなぎ
+DASH_LINK = re.compile(r"\S ?[—―─━]{1,2} ?\S")  # 全角ダッシュ・水平線・罫線の文字でのつなぎ（空白は _leaf_texts で1つに正規化済み）
 
 
-def check_dash_link(idx, text):
-    """§7.1: 「 — 」でつながない（AI 臭の典型）。非該当セルの「—」単独は可（前後が要素の切れ目で空く）"""
-    m = DASH_LINK.search(text)
-    if m:
-        fail(f"p{idx}: 「—」で語句をつないでいる「{text[max(0, m.start() - 10):m.end() + 10].strip()}」（句点・「：」・括弧で区切る。§7.1）")
+def check_dash_link(idx, leaves):
+    """§7.1: 「 — 」でつながない（AI 臭の典型）。非該当セルの「—」単独は可。
+    ブロック要素ごとの文章塊で見るので、タグの組み方や空白の数で判定が変わらない"""
+    for text in leaves:
+        m = DASH_LINK.search(text)
+        if m:
+            fail(f"p{idx}: 「—」で語句をつないでいる「{text[max(0, m.start() - 10):m.end() + 10].strip()}」（句点・「：」・括弧で区切る。§7.1）")
+            return
 
 
 def check_framework_and_commas(idx, leaves, vis):
@@ -968,7 +984,10 @@ def check_html(path):
         titles.append(t)
         cls = (slide_classes[i - 1] if i - 1 < len(slide_classes) else "").split()
         nums.append((i, page_number(s)))
-        if not TEMPLATE_MODE and ("cover" in cls or "back" in cls or i == len(slides)):
+        # 最終ページは、cover/back の印が無くても、タイトルが無いか締めのあいさつだけのときに限って裏表紙とみなす
+        # （裏表紙の無いデッキの最終ページの比較表の「当社」を見本の文言と取り違えない）
+        is_back = "back" in cls or (i == len(slides) and (not t or bool(CLOSING_TITLE.search(t))))
+        if not TEMPLATE_MODE and ("cover" in cls or is_back):
             left = [x for x in _leaf_texts(s) if re.fullmatch(r"当社|会社名|連絡先|お問い合わせ\s*当社|資料名|担当者名|表紙|裏表紙|章扉", x)]
             if left:
                 fail(f"p{i}: 表紙・裏表紙に見本の文言が残っている「{left[0]}」（作成者・連絡先は実物にし、「表紙」のような型の名前のラベルは消す）")
@@ -988,7 +1007,7 @@ def check_html(path):
         leaves = _leaf_texts(s)
         check_body_placeholders(i, leaves, t)
         check_framework_and_commas(i, leaves, vis)
-        check_dash_link(i, vis)
+        check_dash_link(i, leaves)
         check_exec_summary(i, t, s)
         if "cover" not in cls:
             check_multi_sentence(i, leaves)
@@ -1029,13 +1048,28 @@ def _norm_num(x):
     return x.replace(",", "").replace("，", "")
 
 
+SRC_NUM = re.compile(r"(?<![\d.])\d+(?:\.\d+)?(?![\d])")
+
+
+def _src_numbers(text):
+    """sources.md の数字を、前後が数字でない境界で切り出した集合にする（部分一致で「2025」が「5」を通さないように）。
+    桁区切りのカンマは外し、小数の末尾の 0 は落とした形も入れる（12.50 ↔ 12.5）"""
+    text = re.sub(r"(?<=\d)[,，](?=\d{3}(?!\d))", "", text)
+    out = set()
+    for t in SRC_NUM.findall(text):
+        out.add(t)
+        if "." in t:
+            out.add(t.rstrip("0").rstrip("."))
+    return out
+
+
 def check_sources(html_path, sources_path):
     """数字の出典の控え（sources.md）と照合する。デッキに出てくる数字（単位つき）が控えに無ければ WARN（SKILL.md 手順2）"""
     sp = Path(sources_path)
     if not sp.exists():
         fail(f"出典の控え {sources_path} が無い（SKILL.md 手順2: 数字は調べて控えてから使う）")
         return
-    src = _norm_num(sp.read_text(encoding="utf8", errors="ignore"))
+    src = _src_numbers(sp.read_text(encoding="utf8", errors="ignore"))
     html = Path(html_path).read_text(encoding="utf8", errors="ignore")
     parts = re.split(r'<(?:section|div)[^>]*class="(?:[^"]*\bslide\b[^"]*|s|s [^"]*)"[^>]*>', html)[1:]
     missing = []
@@ -1043,7 +1077,7 @@ def check_sources(html_path, sources_path):
         vis = re.sub(r"<[^>]+>", " ", re.sub(r"<(script|style)[^>]*>.*?</\1>|<!--.*?-->", " ", frag, flags=re.S))
         for m in NUM_FACT.finditer(vis):
             n = _norm_num(m.group(1))
-            if n not in src:
+            if n not in src and (n.rstrip("0").rstrip(".") if "." in n else n) not in src:
                 missing.append(f"p{i}「{m.group(0).strip()}」")
     if missing:
         uniq = list(dict.fromkeys(missing))

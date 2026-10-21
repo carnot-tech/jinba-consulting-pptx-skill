@@ -1,9 +1,9 @@
 // Chrome headless を DevTools Protocol で直接操作する最小ヘルパー（追加依存なし・Node 22+ の標準 WebSocket を使う）。
 // measure_deck.mjs / html_dump.mjs から使う。
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, existsSync, readdirSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readdirSync, statSync, accessSync, constants } from "node:fs";
 import { tmpdir, homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, delimiter } from "node:path";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -26,8 +26,27 @@ export function findBrowser() {
     }
   }
   if (shells.length) return shells.sort((a, b) => b.v - a.v)[0].p;
-  return ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    "C:/Program Files/Google/Chrome/Application/chrome.exe", "/usr/bin/google-chrome", "/usr/bin/chromium"].find(existsSync);
+  // find_browser.py の CHROME_CANDIDATES と同じ順。絶対パスはそのまま、名前だけのものは PATH から探す（shutil.which 相当）
+  for (const c of ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "C:/Program Files/Google/Chrome/Application/chrome.exe", "google-chrome", "google-chrome-stable", "chromium", "chromium-browser"]) {
+    if (existsSync(c)) return c;
+    const w = which(c);
+    if (w) return w;
+  }
+  return undefined;
+}
+
+function which(name) {
+  if (name.includes("/") || name.includes("\\")) return null;
+  const exts = process.platform === "win32" ? (process.env.PATHEXT || ".EXE").split(";") : [""];
+  for (const dir of (process.env.PATH || "").split(delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      const p = join(dir, name + ext);
+      try { if (statSync(p).isFile()) { accessSync(p, constants.X_OK); return p; } } catch {}
+    }
+  }
+  return null;
 }
 
 export async function openPage(file, { width = 1400, height = 900, scale = 1, media = "print" } = {}) {

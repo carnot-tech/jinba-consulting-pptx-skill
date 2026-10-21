@@ -143,27 +143,42 @@ const { issues, warns } = await page.evaluate(() => {
       const span = spanNow().span;
       const empty = area > 0 ? 1 - span / area : 0;
       // 本文の器を何倍にすれば空きが収まるか（§4.12 の「一段大きく」＝本文の大きさの揃い ±15% の範囲）を試算して添える
-      const fitHint = () => {
+      // 器を拡大したときのはみ出し: 文字の下端だけでなく、器の中の全要素（表・図形・画像を含む）の外接矩形の右端・下端を見る
+      const overflowOf = (box) => {
+        const sr = s.getBoundingClientRect();
+        let over = 0;
+        for (const el of box.querySelectorAll("*")) {
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) continue;
+          over = Math.max(over, r.bottom - bottom, r.right - sr.right);
+        }
+        return over;
+      };
+      // 本文の器を何倍にすれば空きが limit を切るか（§4.12 の「一段大きく」＝本文の大きさの揃い ±15% の範囲）を試算して添える
+      const fitHint = (limit) => {
         const box = s.querySelector(":scope .c, :scope .sinner > .content");
         if (!box || area <= 0) return "";
         const orig = box.style.zoom;
         let best = null;
+        const base = Math.max(1, overflowOf(box) + 1); // 拡大前からはみ出している分（別の FAIL で出る）は差し引く
         for (const z of [1.05, 1.1, 1.15]) {
           box.style.zoom = String(z);
           const m = spanNow();
-          if (m.over > 1) break;
+          if (m.over > 1 || overflowOf(box) > base) break;
           best = { z, empty: 1 - m.span / area };
           if (best.empty <= 0.28) break;
         }
         box.style.zoom = orig;
         const name = box.classList.contains("c") ? ".c" : ".content";
-        if (best && best.empty <= 0.4) return ` 試算: このページの本文の器（${name}）に zoom:${best.z} を付けると空き約${Math.round(best.empty * 100)}%（はみ出しなし）。`;
-        return " 試算: 本文を1.15倍にしても40%を切らない。前後のページとまとめるか、形を変える（文字をさらに大きくすると、他のページと本文の大きさが揃わなくなる）。";
+        const pct = Math.round(limit * 100);
+        if (!best) return ` 試算: 本文の器（${name}）を1.05倍にするだけで版面からはみ出す。拡大では直らないので、配置を変えるか前後のページとまとめる。`;
+        if (best.empty <= limit) return ` 試算: このページの本文の器（${name}）に zoom:${best.z} を付けると空き約${Math.round(best.empty * 100)}%（はみ出しなし）。`;
+        return ` 試算: 本文の器（${name}）をはみ出さない上限の${best.z}倍にしても空き約${Math.round(best.empty * 100)}%で${pct}%を切らない。前後のページとまとめるか、形を変える（文字をさらに大きくすると、他のページと本文の大きさが揃わなくなる）。`;
       };
       if (empty > 0.4) {
-        out.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（40%超。直し方は、文字を一段大きくする・配置を変える（右に意味合いの列を置く等）・前後のページと統合する。空きを埋めるために数字・事例・行を足さない。項目の間や列の高さを広げて埋めない — §4.12・§5.13）${fitHint()}`);
+        out.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（40%超。直し方は、文字を一段大きくする・配置を変える（右に意味合いの列を置く等）・前後のページと統合する。空きを埋めるために数字・事例・行を足さない。項目の間や列の高さを広げて埋めない — §4.12・§5.13）${fitHint(0.4)}`);
       } else if (empty > 0.3) {
-        warnOut.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（30%超。「下が空きすぎ」と差し戻されやすい。文字を一段大きくする・配置を変える。空きを埋めるために中身を足さない — §5.13）${fitHint()}`);
+        warnOut.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（30%超。「下が空きすぎ」と差し戻されやすい。文字を一段大きくする・配置を変える。空きを埋めるために中身を足さない — §5.13）${fitHint(0.3)}`);
       }
     }
     // 13. 表の行の縦の引き伸ばし（§4.12）: 行の高さのうち、一番高いセルの中身と上下の余白を超える分を1行の高さで割る
@@ -296,14 +311,22 @@ const { issues, warns } = await page.evaluate(() => {
       }
     }
     // 9. 罫線の太さを役割（要素名＋クラス＋辺）ごとに集める（背景と同じ色の線は区切りの余白なので数えない）
-    const slideBg = getComputedStyle(s).backgroundColor;
+    // 線の下にある背景の色: 自分か祖先のうち最初に塗りのある要素の色（スライドも透明なら紙の白）。
+    // 白い線を一律に外すと、濃色の背景（章扉・主張パネル）の白い区切り線の不揃いを見逃すので、背景と同じ色の線だけを外す
+    const bgBehind = (el) => {
+      for (let e = el; e; e = e.parentElement) {
+        const bg = getComputedStyle(e).backgroundColor;
+        if (bg && bg !== "transparent" && !/rgba\([^)]*,\s*0\)$/.test(bg)) return bg;
+      }
+      return "rgb(255, 255, 255)";
+    };
     for (const el of std ? [] : s.querySelectorAll("*")) {
       const st = getComputedStyle(el);
       for (const side of ["Top", "Bottom", "Left", "Right"]) {
         const w = parseFloat(st[`border${side}Width`]);
         if (!(w > 0) || st[`border${side}Style`] === "none") continue;
         const bc = st[`border${side}Color`];
-        if (bc === slideBg || bc === "rgb(255, 255, 255)" || /rgba\([^)]*,\s*0\)$/.test(bc)) continue;
+        if (/rgba\([^)]*,\s*0\)$/.test(bc) || bc === bgBehind(el.parentElement || s)) continue;
         const scale = el.offsetWidth ? el.getBoundingClientRect().width / el.offsetWidth : 1;
         const key = `${el.tagName.toLowerCase()}${el.classList.length ? "." + [...el.classList].sort().join(".") : ""}:${side.toLowerCase()}`;
         (borders[key] ||= new Map()).set(Math.round(w * scale * 2) / 2, n);
@@ -688,16 +711,26 @@ const { issues, warns } = await page.evaluate(() => {
       }
       // 27. 並べた項目の間を空けて版面を埋める間延び（箇条書き・縦に並べた同じ種類の項目。§4.12）
       {
+        // 項目の中身の上下: 文字の行ボックスに加えて、中の塗り・枠のある要素（文字の無いバー、padding 付きのカード）と
+        // 画像・図の外接矩形も中身に数える（それらの高さを「余分な空き」に入れない）。項目自身の枠は数えない＝引き伸ばしは引き続き測れる
         const textBox = (el) => {
           let t = Infinity, b = -Infinity;
-          for (const x of [el, ...el.querySelectorAll("*")]) for (const r of ownTextRects(x)) { t = Math.min(t, r.top); b = Math.max(b, r.bottom); }
+          const take = (r) => { if (r.width > 0 && r.height > 0) { t = Math.min(t, r.top); b = Math.max(b, r.bottom); } };
+          for (const x of [el, ...el.querySelectorAll("*")]) for (const r of ownTextRects(x)) take(r);
+          for (const x of el.querySelectorAll("*")) {
+            if (x.closest("svg") && x.tagName.toLowerCase() !== "svg") continue;
+            if (/^(svg|img|canvas)$/i.test(x.tagName) || isBoxed(getComputedStyle(x))) take(x.getBoundingClientRect());
+          }
           return b > t ? { t, b } : null;
         };
         let worst = null;
         for (const box of s.querySelectorAll("ul, ol, div")) {
           if (box.closest("table, svg, .foot, .footer, footer, .src, .bar, .legend, h1, .title, .ttl")) continue;
           if (/tree/.test(box.className) || box.closest("[class*='tree']")) continue; // ツリーは枝の間が子の数に合わせて開くのが自然
-          const kids = [...box.children].filter((k) => { const st = getComputedStyle(k); return st.display !== "none" && st.visibility !== "hidden" && st.position !== "absolute" && (k.textContent || "").trim(); });
+          const shown = [...box.children].filter((k) => { const st = getComputedStyle(k); return st.display !== "none" && st.visibility !== "hidden" && st.position !== "absolute"; });
+          // 文字の無い子（ラベルの下の塗りのバー等）が挟まる並びは項目の間に中身があるので、項目の並びとして測らない
+          if (shown.some((k) => !(k.textContent || "").trim() && k.getBoundingClientRect().height > 1)) continue;
+          const kids = shown.filter((k) => (k.textContent || "").trim());
           if (kids.length < 2 || kids.some((k) => k.tagName !== kids[0].tagName || k.className !== kids[0].className)) continue;
           const tb = kids.map(textBox);
           if (tb.some((x) => !x)) continue;
@@ -838,7 +871,7 @@ const { issues, warns } = await page.evaluate(() => {
 
 // 28. PDF にしたときのページ数がスライドの枚数と合うか（1枚が用紙より高いと、PDF で2ページに割れる）
 try {
-  const nSlides = await page.evaluate(() => document.querySelectorAll("section.s, section.slide").length);
+  const nSlides = await page.evaluate(() => document.querySelectorAll("section.s, section.slide, .slide").length);
   const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true });
   const nPages = (pdf.toString("latin1").match(/\/Type\s*\/Page(?!s)/g) || []).length;
   if (nSlides && nPages && nPages !== nSlides)
