@@ -29,7 +29,7 @@ description: スライド設計規約 slide-rules.md を核に、経営会議品
 | `assets/SuperTemplate_62type.pptx` | 62型のPPTX見本帳（全スライド編集可能。基本パーツ集の b28〜b30 は未収録） | PPTX を手で組むとき |
 | `scripts/measure_deck.py` | 既存の PowerPoint 資料（.pptx／テンプレートの .potx）の書式を測って `skin.json` に書き出す | 既存の資料へ差し込むページを作るとき（最初に）|
 | `scripts/deck_pptx.py` | その資料のマスターの上に、同じ書式のページを組む部品（作例は `examples/house_deck_example.py`） | 同上 |
-| `local/`（git 管理外） | 利用者の組織の規約 `slide-rules.local.md`・禁止語 `forbid.txt`・自前テンプレ（`local/README.md`） | あれば本体の規約の後に必ず読む。無ければ飛ばす |
+| `local/`（git 管理外） | 利用者の組織の規約 `slide-rules.local.md`・禁止語 `forbid.txt`・レガシー色 `old-colors.txt`（check_deck が自動で読む）・自前テンプレ（`local/README.md`） | あれば本体の規約の後に必ず読む。無ければ飛ばす |
 
 ## 規約の要点（入口。全文は必ず読む）
 

@@ -8,6 +8,8 @@
   python3 check_deck.py deck.html --forbid ~/.config/deck-forbidden-terms.txt   # 顧客名・社内語の残りを FAIL
   python3 check_deck.py pages.pptx --house house.skin.json   # 既存の資料へ差し込むページ（slide-rules §8.7）
   python3 check_deck.py out.pptx --xml-only                  # PowerPoint が開けなくなる不正だけを見る
+  python3 check_deck.py deck.html --old-colors local/old-colors.txt   # 自社のレガシー色を FAIL（local/old-colors.txt は指定なしでも読む）
+  python3 check_deck.py deck.html --brand none                # レガシー色の検査だけを外す（他社の書式で組むとき）
 
 正典: references/slide-rules.md
 終了コード: FAIL があれば 1。
@@ -18,8 +20,10 @@ import sys
 import zipfile
 from pathlib import Path
 
-# 自ブランドで禁止するレガシー色があればここに列挙（HEX 6桁・#なし）
+# 自ブランドで禁止するレガシー色（HEX 6桁・#なし）。本体は空のまま、local/old-colors.txt（1行1色）か
+# --old-colors で渡す。--brand none で外す（他社の書式で組むとき）
 OLD_COLORS = []
+LOCAL_DIR = Path(__file__).resolve().parent.parent / "local"
 TITLE_MAX = 40
 EMU_W, EMU_H = 12192000, 6858000
 
@@ -649,6 +653,7 @@ def check_pptx(path):
         titles.append(title)
         check_title(i, title, explicit_break)
         check_count_match(i, title, dict(term_pages).get(i, ""))
+        check_axis_names_pptx(i, s)
         # サブタイトル疑い: タイトル直下 (y 1.2〜1.75in) の細字テキスト1行
         for sh in s.shapes:
             if sh.has_text_frame and sh.top is not None and Emu(1097280) <= sh.top < Emu(1600200):
@@ -657,6 +662,7 @@ def check_pptx(path):
                     szs = [r.font.size.pt for p in sh.text_frame.paragraphs for r in p.runs if r.font.size]
                     if szs and max(szs) <= 12 and not any(r.font.bold for p in sh.text_frame.paragraphs for r in p.runs):
                         warn(f"p{i}: タイトル直下にサブタイトルらしき行: 「{txt}」")
+    PAGES[:] = term_pages
     check_terms(term_pages)
     check_number_consistency(term_pages)
     check_page_refs(term_pages)
@@ -911,12 +917,15 @@ def check_html(path):
         if "cover" not in cls:
             check_multi_sentence(i, leaves)
             check_trailing_period(i, [x for x in leaves if x != t])
+        check_axis_names_html(i, s)
         if not closing:
             check_body_desu(i, leaves, t)
         check_single_item_lists(i, s)
         check_typed_bullets(i, s)
         shapes.append(page_shape(s))
     check_page_refs([(i, re.sub(r"<[^>]+>", " ", s)) for i, s in enumerate(slides, 1)])
+    PAGES[:] = [(i, re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", s, flags=re.S))))
+                for i, s in enumerate(slides, 1)]
     if not slides:
         warn("`.slide` 要素が見つからない（タイトル検査スキップ）")
     check_shape_runs(shapes)
@@ -940,10 +949,93 @@ def check_html(path):
     return titles
 
 
+def load_colors(path):
+    """1行1色（HEX 6桁、# は付けても付けなくてもよい）。# で始まる行と空行は読み飛ばす"""
+    out = []
+    for line in Path(path).expanduser().read_text(encoding="utf8").splitlines():
+        line = line.split("  #")[0].strip()
+        if not line or (line.startswith("#") and not re.fullmatch(r"#[0-9A-Fa-f]{6}", line)):
+            continue
+        out.append(line.lstrip("#").upper())
+    return out
+
+
+def _cell_text(cell_html):
+    t = re.sub(r"<[^>]+>", "", cell_html)
+    return re.sub(r"(&nbsp;|&#160;|\s|　)+", "", t)
+
+
+def check_axis_names_html(idx, slide_html):
+    """§4.102: 見出し行（th だけの行）の左端セルが空欄なら FAIL。他の見出しセルに文字があるときだけ判定"""
+    n = 0
+    for table in re.findall(r"<table\b.*?</table>", slide_html, re.S | re.I):
+        for tr in re.findall(r"<tr\b[^>]*>(.*?)</tr>", table, re.S | re.I):
+            cells = re.findall(r"<(t[hd])\b[^>]*>(.*?)</\1>", tr, re.S | re.I)
+            if len(cells) < 2 or any(tag.lower() != "th" for tag, _ in cells):
+                continue
+            if not _cell_text(cells[0][1]) and any(_cell_text(c) for _, c in cells[1:]):
+                n += 1
+    if n:
+        fail(f"p{idx}: 表の見出し行の左端セルが空欄 ×{n}（§4.102: フェーズ帯・ステップ帯にも軸の名前を書く）")
+
+
+def check_axis_names_pptx(idx, slide):
+    """§4.102 の PPTX 版: 表の先頭の見出し帯（左端列が埋まるまでの最大3段）で左端セルが空欄なら FAIL"""
+    for sh in slide.shapes:
+        if not getattr(sh, "has_table", False):
+            continue
+        tbl = sh.table
+        if len(tbl.rows) < 2 or len(tbl.columns) < 2:
+            continue
+        for r in list(tbl.rows)[:3]:
+            cells = list(r.cells)
+            if cells[0].is_spanned or cells[0].text.strip():
+                break
+            if any(c.text.strip() for c in cells[1:]):
+                fail(f"p{idx}: 表の見出し行の左端セルが空欄（§4.102: フェーズ帯・ステップ帯にも軸の名前を書く）")
+                return
+
+
+PAGES = []  # [(idx, 本文テキスト)] check_pptx / check_html が詰める
+DIVIDER_RE = r"^\s*(Appendix|APPENDIX|付録|参考資料|補足資料)(\s*[:：／/|・].{0,20})?\s*$"
+
+
+def check_appendix(titles):
+    """§4.100: 付録らしきページがあるのに、その手前に区切りスライドがなければ FAIL"""
+    if not PAGES:
+        return
+    # 付録ページの判定は「タイトル」か「ページ冒頭（タグチップ・キッカー）」に Appendix／付録 があるときだけ。
+    # 本文中の言及（「Appendix A-1 を参照」等）では反応させない。
+    tag = r"^\s*(Appendix|APPENDIX|付録)"
+    head = {i: t.strip()[:40] for i, t in PAGES}
+    first = next((i for i, _ in PAGES if i > 1 and (re.search(tag, head[i]) or
+                  (i - 1 < len(titles) and re.search(tag, titles[i - 1] or "")))), None)
+    if first is None:
+        return
+    ttl = lambda i: (titles[i - 1] or "").strip() if i - 1 < len(titles) else ""
+    body = dict(PAGES)
+    # 扉 = タイトルが「Appendix」等そのもの、またはタイトルを持たない短いページ（h1 以外で組んだ扉）
+    is_div = lambda i: re.match(DIVIDER_RE, ttl(i)) or (not ttl(i) and len(body.get(i, "").strip()) <= 80
+                                                         and re.match(r"^\s*(Appendix|APPENDIX|付録|参考資料|補足資料)", body.get(i, "")))
+    if not any(is_div(i) for i in range(2, first + 1)):
+        fail(f"p{first}: 付録（Appendix）の手前に区切りスライドがない（§4.100: 本編と付録の間に「Appendix」＋中身1行の扉を1枚挟む）")
+
+
 def main():
     global TEMPLATE_MODE
     args = sys.argv[1:]
     global FORBIDDEN_TERMS, PART_TYPE_NAMES, XML_ONLY, HOUSE
+    if (LOCAL_DIR / "old-colors.txt").exists():
+        OLD_COLORS[:] = load_colors(LOCAL_DIR / "old-colors.txt")
+    if "--old-colors" in args:
+        k = args.index("--old-colors")
+        OLD_COLORS[:] = load_colors(args[k + 1])
+        del args[k:k + 2]
+    if "--brand" in args:
+        k = args.index("--brand")
+        if args[k + 1] == "none":
+            OLD_COLORS.clear()
+        del args[k:k + 2]
     if "--xml-only" in args:
         XML_ONLY = True
         args.remove("--xml-only")
@@ -966,6 +1058,7 @@ def main():
     titles = check_pptx(p) if p.lower().endswith((".pptx", ".potx")) else check_html(p)
     if not TEMPLATE_MODE:
         check_title_variety(titles)
+        check_appendix(titles)
     print("=== タイトル一覧（上から通し読みしてストーリーが繋がるか確認） ===")
     for i, t in enumerate(titles, 1):
         print(f"{i:>3}  {t or '(なし)'}")

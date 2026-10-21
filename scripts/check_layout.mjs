@@ -18,6 +18,8 @@
 //  16. 塗り・枠のある大きな箱の中が半分以上空いている（WARN。§4.54: 箱で囲っても空きは空き）
 //  17. 文字が箱・セルの外にはみ出している（FAIL）
 //  18. 同じ作りの本文の文字が違う大きさ・文の途中の太字が3か所以上（WARN。§4.19・§5.5）
+//  19. 表のセルの塗りに、同じ色の凡例チップがない（WARN。§5.2・§4.57。「—」だけの非該当セルは除く）
+//  20. 表の見出し（th）の塗り（WARN。§6）
 //   4 の補足: 版面の30%超が空いているときは WARN（40%超は FAIL）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
 // 使い方: node scripts/check_layout.mjs deck.html   （playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
@@ -459,6 +461,44 @@ const { issues, warns } = await page.evaluate(() => {
         }
         for (const el of s.querySelectorAll("mark")) if ((el.textContent || "").trim() && painted(el)) spots++;
         if (spots >= 2) warnOut.push(`p${n}: 塗りで立てた箇所が ${spots} か所ある（§4.57: 1ページ1か所まで。塗りが値を表すヒートマップなら無視してよい）`);
+      }
+      // 19・20. 塗りの意味：表のセルの塗りに同じ色の凡例チップがない（WARN。§5.2・§4.57）／表の見出しの塗り（WARN。§6）
+      {
+        const rgb = (bg) => {
+          const m = (bg || "").match(/rgba?\(([^)]+)\)/);
+          if (!m) return null;
+          const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number);
+          return v.length > 3 && v[3] < 0.1 ? null : v.slice(0, 3);
+        };
+        const near = (a, b, t = 14) => !!(a && b) && a.every((v, k) => Math.abs(v - b[k]) <= t);
+        const hex = (c) => "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+        const pageBg = rgb(getComputedStyle(s).backgroundColor) || rgb(getComputedStyle(document.body).backgroundColor) || [255, 255, 255];
+        const plain = (c) => !c || near(c, pageBg, 6) || c.every((v) => v > 247);
+        const own = (el) => rgb(getComputedStyle(el).backgroundColor);
+        // 凡例チップ＝30px 四方以下の塗り（セルの中の棒・ドットも含む。同じ色が凡例にあれば意味を言えている）
+        const chips = [];
+        for (const el of s.querySelectorAll("*")) {
+          const r = el.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0 && r.width <= 30 && r.height <= 30 && !plain(own(el))) chips.push(own(el));
+        }
+        const noLegend = new Map();
+        let thFill = 0;
+        for (const t of s.querySelectorAll("table")) {
+          if (t.closest(".foot, .footer, footer, .src")) continue;
+          const tbg = own(t);
+          for (const cell of t.querySelectorAll("th, td")) {
+            let c = own(cell);
+            if (plain(c) && cell.parentElement) c = own(cell.parentElement);
+            if (plain(c) || (tbg && near(c, tbg, 4))) continue;
+            if (cell.tagName === "TH" || cell.closest("thead")) { thFill++; continue; }
+            if (/^[—\-–ー/\s]*$|^N\/?A$/.test((cell.textContent || "").trim())) continue; // 非該当のグレー（§6）
+            if (chips.some((x) => near(x, c))) continue;
+            noLegend.set(hex(c), (noLegend.get(hex(c)) || 0) + 1);
+          }
+        }
+        for (const [c, k] of noLegend)
+          warnOut.push(`p${n}: 表の塗り ${c}（セル×${k}）に同じ色の凡例チップがない（§5.2: 色を変えるなら同じページに実物と同じ色のチップ＋意味。脚注1行で意味を言っているなら無視してよい）`);
+        if (thFill) warnOut.push(`p${n}: 表の見出しに塗り ×${thFill}（§6: 見出しは塗らず、太い下罫で軸を示す）`);
       }
     }
     // 6. タイトルと本文の実際の大きさ（表紙・章扉・裏表紙は対象外）
