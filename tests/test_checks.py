@@ -643,3 +643,29 @@ class PptxVideoAndExternal(unittest.TestCase):
             self.assertEqual(len(prs.slides), n_html + 1)
             xml = "".join(sl.part.blob.decode("utf8", "ignore") for sl in prs.slides)
             self.assertIn("p:videoFile", xml.replace("a:videoFile", "p:videoFile"))
+
+
+@unittest.skipUnless(_has_pptx() and _has_playwright(), "python-pptx と playwright が要る")
+class PptxCssZoom(unittest.TestCase):
+    """html_to_pptx：スライドに CSS の zoom をかけたデッキ（追加パーツ集の .slide{zoom:0.8}）でも、文字が縮小前の大きさにならない"""
+
+    def _max_font_pt(self, html):
+        from pptx import Presentation
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "deck.html"
+            p.write_text(html, encoding="utf8")
+            out = Path(d) / "deck.pptx"
+            subprocess.run([sys.executable, str(ROOT / "scripts" / "html_to_pptx.py"), str(p), str(out)],
+                           capture_output=True, text=True, check=True)
+            prs = Presentation(str(out))
+            return [max((r.font.size.pt for sh in sl.shapes if sh.has_text_frame
+                         for para in sh.text_frame.paragraphs for r in para.runs if r.font.size), default=0)
+                    for sl in prs.slides]
+
+    def test_zoomed_deck_keeps_font_sizes(self):
+        # 全ページを同じ倍率で縮めたデッキは、スライドの幅に合わせて広げ直すので、文字の大きさは縮めない版と同じになるはず
+        plain = self._max_font_pt(GOOD)
+        zoomed = self._max_font_pt(GOOD.replace("</style>", "section.s{zoom:0.8}</style>", 1))
+        self.assertEqual(len(plain), len(zoomed))
+        for i, (a, b) in enumerate(zip(plain, zoomed), 1):
+            self.assertAlmostEqual(a, b, delta=0.5, msg=f"p{i}: 縮めない版 {a}pt／zoom:0.8 の版 {b}pt")

@@ -16,6 +16,21 @@ try { page = await openPage(file, { scale: 1 }); } catch (e) { console.error(Str
 
 // ---- ページ内で実行する採取 ----------------------------------------------------
 const collect = () => {
+  // CSS の zoom（追加パーツ集の .slide{zoom:0.8}）を長さに反映する。getBoundingClientRect は zoom 後の値を、
+  // getComputedStyle の px は zoom 前の値を返すため、文字の大きさ・行間・余白・罫線の太さだけが 1/zoom 倍になっていた。
+  // currentCSSZoom の無いブラウザでは 1 として扱い、これまでどおりに動く
+  const _gcs = window.getComputedStyle.bind(window);
+  const LEN = /^(fontSize|lineHeight|padding(Top|Right|Bottom|Left)|border(Top|Right|Bottom|Left)Width|left)$/;
+  const getComputedStyle = (el, pseudo) => {
+    const st = _gcs(el, pseudo);
+    const z = (el && el.currentCSSZoom) || 1;
+    if (Math.abs(z - 1) < 1e-6) return st;
+    return new Proxy(st, { get(t, k) {
+      const v = t[k];
+      if (typeof k === "string" && LEN.test(k) && typeof v === "string" && /px$/.test(v)) return (parseFloat(v) * z) + "px";
+      return typeof v === "function" ? v.bind(t) : v;
+    } });
+  };
   const MM = 96 / 25.4;
   const rgba = (s) => {
     const m = (s || "").match(/rgba?\(([^)]+)\)/);
