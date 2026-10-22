@@ -13,10 +13,11 @@
   表 → PowerPoint の表（結合セル・セルの塗り・罫線・余白を保持）
   SVG・画像・背景画像 → 透過PNG（中の数値は編集できない）
   動画（<video>）→ 動画として埋め込み、描画された1コマを再生前の静止画にする（元ファイルが手元にあるとき）
-依存: Node 22+ と Chrome（html_dump.mjs）、python-pptx。
+依存: Node 22+ と Chromium headless shell（`npm run setup`。CHROME_PATH で Chrome 本体にも切り替えられる）、python-pptx。動画を埋め込むなら ffmpeg。
 """
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -290,6 +291,15 @@ def local_media(src, html):
     return p if p.exists() and p.suffix.lower() in VIDEO_MIME else None
 
 
+def _ffmpeg_poster(mv, poster):
+    """動画の最初の1コマを取り出す。stdin を読まず（パイプライン内で止まらない）、時間を区切る"""
+    try:
+        return subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", str(mv), "-frames:v", "1", str(poster)],
+                              stdin=subprocess.DEVNULL, capture_output=True, timeout=60).returncode == 0
+    except subprocess.TimeoutExpired:
+        return False
+
+
 def convert(html, out, external=False):
     here = Path(__file__).resolve().parent
     with tempfile.TemporaryDirectory() as td:
@@ -322,6 +332,11 @@ def convert(html, out, external=False):
                     p = Path(td) / it["file"]
                     mv = local_media(it.get("video"), html)
                     if mv:
+                        # 再生前の静止画は、動画ファイルから ffmpeg で最初の1コマを取り出す（ブラウザの動画対応に頼らない。
+                        # Linux の Chromium は H.264 を再生できないことがあり、描画した1コマが黒くなるため）。ffmpeg が無ければ描画した1コマ
+                        poster = Path(td) / f"poster_{it['file']}"
+                        if shutil.which("ffmpeg") and _ffmpeg_poster(mv, poster) and poster.exists():
+                            p = poster
                         slide.shapes.add_movie(str(mv), sc(it["x"]), sc(it["y"]), sc(it["w"]), sc(it["h"]),
                                                poster_frame_image=str(p) if p.exists() else None,
                                                mime_type=VIDEO_MIME[mv.suffix.lower()])

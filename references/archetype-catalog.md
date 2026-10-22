@@ -68,7 +68,7 @@
 | 19 | `theme_card_grid` | テーマカード | 複数のテーマをカードで並べる場合 | 追加パーツ集 P.19 |
 | 20 | `recommendation_pillars` | 提言の柱 | 複数の提言を柱立てで示す場合 | 追加パーツ集 P.20 |
 | 21 | `numbered_imperatives` | 番号つき打ち手 | やるべきことを番号付きで示す場合 | 追加パーツ集 P.21 |
-| 22 | `scr` | Situation・Complication・Resolution | Situation・Complication・Resolution（状況・難しさ・解決）の3段で語る場合 | 追加パーツ集 P.22 |
+| 22 | `scr` | これまで・課題・対策（流れの3段） | 状況・課題・対策の3段で語る場合（列の見出しは中身の言葉にし、Situation などの枠組みの名前は出さない。§7.32） | 追加パーツ集 P.22 |
 | 23 | `issue_to_solution_map` | 課題と打ち手の対応 | 課題と解決策を対応付ける場合 | 追加パーツ集 P.23 |
 | 24 | `issue_cause_solution` | 課題→原因→解決 | 課題から原因、解決策へ流れで示す場合 | 追加パーツ集 P.24 |
 | 25 | `issue_tree` | イシューツリー | 課題をツリーで分解する場合 | 追加パーツ集 P.25 |

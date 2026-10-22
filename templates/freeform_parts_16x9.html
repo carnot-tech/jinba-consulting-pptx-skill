@@ -58,11 +58,10 @@ h1{margin:4.5mm 0 0 0;font-family:var(--font-serif);font-size:22pt;line-height:1
 .bd{padding:3.5mm 4.5mm;font-size:10pt;line-height:1.7;color:var(--ink);flex:1}
 .ref{font-size:8pt;color:var(--accent);font-weight:700;margin-left:auto;white-space:nowrap}
 .rows .r>div:last-child{display:flex;justify-content:space-between;align-items:baseline;gap:4mm} /* 「→ P.n」を右端に */
-.rows .r{display:grid;grid-template-columns:44mm 1fr;gap:6mm;padding:4mm 0;border-top:1px solid var(--rule);font-size:11.5pt;line-height:1.6}
+.rows .r{display:grid;grid-template-columns:48mm 1fr;gap:6mm;padding:3mm 0;border-top:1px solid var(--rule);font-size:11.5pt;line-height:1.45;align-items:center} /* 行は中身の高さ。引き伸ばさない（§4.12） */
 .rows .r:first-child{border-top:0}
-.rows .l{font-family:var(--font-serif);font-weight:700;font-size:14.5pt;color:var(--accent)}
-.c>.rows{flex:1;display:flex;flex-direction:column}
-.c>.rows .r{flex:1;align-items:center}
+.rows .l{font-family:var(--font-serif);font-weight:700;font-size:12.5pt;line-height:1.35;color:var(--accent)} /* 行見出しは列見出し（14.5pt）より小さく本文より大きく（§6） */
+.c>.rows{display:flex;flex-direction:column;margin:auto 0} /* 行の束は中身の高さのまま上下中央に置く（§4.12） */
 .stat{background:var(--navy);color:#fff;padding:4mm 5mm}
 .stat.l{background:var(--soft);color:var(--navy)}
 .stat .lb{font-size:7.5pt;letter-spacing:.1em;font-weight:700;color:var(--cyan)}
@@ -72,11 +71,20 @@ h1{margin:4.5mm 0 0 0;font-family:var(--font-serif);font-size:22pt;line-height:1
 .stat.l .cp{color:var(--muted)}
 table{border-collapse:collapse;width:100%;font-size:11.5pt;flex:0 0 auto}
 th{background:none;text-align:left;padding:2.5mm;font-size:14.5pt;font-weight:700;color:var(--navy);border-bottom:1.8px solid var(--navy)}
-td{padding:4.5mm 2.5mm;border-bottom:1px solid var(--rule);vertical-align:middle;line-height:1.65;color:var(--ink)}
-td.b{font-weight:700;color:var(--navy)}
+td{padding:3mm 2.5mm;border-bottom:1px solid var(--rule);vertical-align:middle;line-height:1.45;color:var(--ink)} /* 上下の余白と行間を詰めて、行が間延びしないようにする（§4.12） */
+td.b{font-weight:700;color:var(--navy);white-space:nowrap} /* 数字を折らない（「約／86%」と折れると大きさが違って見える） */
 tr:last-child td{border-bottom:0}
-td.ax{font-size:14.5pt;font-weight:700;color:var(--accent);font-family:var(--font-serif);border-right:1.8px solid var(--navy)}
-th.ax{border-right:1.8px solid var(--navy)}
+td.ax{font-size:12.5pt;line-height:1.35;font-weight:700;color:var(--accent);font-family:var(--font-serif);border-right:1.8px solid var(--navy)} /* 行見出しは列の見出し（14.5pt）より小さく、本文（11.5pt）より大きく（§6） */
+th.ax{border-right:0} /* 行の軸の縦線は本文の行だけ。見出しの行に通すと、見出しの下罫より上に線がはみ出る（§6） */
+/* 軸ボックスの表（b09:axb）: 行の軸を左の塗りの箱で示す（slide-rules §6「塗りの軸ボックス」） */
+table.axb{border-collapse:separate;border-spacing:5mm 0;width:calc(100% + 10mm)}
+.c>table.axb,.side .sb>table.axb,.two>div>table.axb,table.axb{margin-left:-5mm!important;margin-right:-5mm!important} /* 列の間の空き（border-spacing）を左右の端で打ち消し、左端をタイトルに揃える。デッキ側の table の margin 上書きで崩れないよう !important */ /* 列の間の空きの分だけ外へ広げ、左端をタイトルと揃える（上下中央の margin:auto 0 より強く） */
+table.axb th{border-bottom:1.8px solid var(--navy)}
+table.axb th.ax{border-bottom:0;border-right:0;color:transparent} /* 箱が軸を示すので、箱の列に見出しを置かない。下罫は箱の列の右から */
+table.axb td{border-bottom:1px solid var(--rule)} /* 行の線は列ごとに切れる（縦の区切りの位置で切る） */
+table.axb td.ax{background:var(--navy);color:#fff;border-right:0;border-bottom:1.5mm solid var(--slide-bg);font-size:12.5pt;padding:3mm 4mm} /* 箱の下に横線を通さない */
+table.axb tr:last-child td{border-bottom:0} /* 最終行の下に線を引かない */
+table.axb td:not(.ax)+td,table.axb th:not(.ax)+th{padding-left:4mm} /* 観点を並べた列なので縦の区切り線は引かない。列の間の空きと、列ごとに切れた行の線で区切る（§6） */
 /* 表は中身の高さのまま上下中央に置く。容器ごと中央寄せすると出典(.src)まで持ち上がるので、表自身の上下 margin:auto で寄せる（§4.12・§4.47） */
 .c>table{flex:0 0 auto;height:auto;margin:auto 0}
 /* 列の内容が同種（時点・案など）なら等幅にする。最後の列だけに余白を吸わせて右側を空けない（§4.12） */
@@ -97,7 +105,7 @@ table.eq{table-layout:fixed}
 .two>div:first-child table{flex:0 1 auto}
 .two>div>ul{flex:1;display:flex;flex-direction:column;justify-content:center} /* 左右どちらのブレットも縦中央（§4.5 下端揃え） */
 /* カラム見出し（.colh）と軸タイトル（.axh）は同じ高さ・同じ余白にして左右で罫線が揃うようにする（§4.21） */
-.two .colh,.axh{font-family:var(--font-serif);font-size:11.5pt;font-weight:700;color:var(--navy);border-bottom:1.8px solid var(--navy);height:7mm;box-sizing:content-box;padding:0 0 1.5mm 0;margin:0 0 3.5mm 0;flex:0 0 auto;display:flex;justify-content:space-between;align-items:flex-end}
+.two .colh,.axh{font-family:var(--font-serif);font-size:14.5pt;font-weight:700;color:var(--navy);border-bottom:1.8px solid var(--navy);height:7mm;box-sizing:content-box;padding:0 0 1.5mm 0;margin:0 0 3.5mm 0;flex:0 0 auto;display:flex;justify-content:space-between;align-items:flex-end}
 .two .colh{color:var(--accent)}
 .two ul{margin:0;padding-left:4.5mm;font-size:10pt;line-height:1.8;color:var(--ink)}
 .two li{margin-bottom:2.5mm}
@@ -125,11 +133,11 @@ table.eq{table-layout:fixed}
 .axh .u{font-family:var(--font-sans);font-size:8.5pt;font-weight:400;color:var(--muted)}
 .note{font-size:8pt;letter-spacing:.08em;font-weight:700;color:var(--accent);border-bottom:1px solid var(--cyan);align-self:flex-start;padding-bottom:.8mm;flex:0 0 auto}
 /* 左サイドの主張パネル */
-.side{display:grid;grid-template-columns:62mm 1fr;gap:0;flex:1;min-height:0}
+.side{display:grid;grid-template-columns:62mm 1fr;gap:0;flex:0 1 auto;min-height:0;margin:auto 0} /* 中身の高さで上下中央。パネルをページの高さまで伸ばさない（§4.12） */
 .side .sp{background:var(--navy);color:#fff;padding:6mm 6mm;display:flex;flex-direction:column}
 .side .sp .cn{font-family:var(--font-serif);font-size:26pt;font-weight:700;color:var(--cyan);line-height:1}
 .side .sp .ct{font-size:9.5pt;font-weight:700;letter-spacing:.08em;color:var(--cyan);margin-top:1.5mm}
-.side .sp .cm{font-family:var(--font-serif);font-size:14pt;font-weight:700;line-height:1.55;margin-top:auto}
+.side .sp .cm{font-family:var(--font-serif);font-size:14pt;font-weight:700;line-height:1.55;margin-top:5mm} /* 主張の文を最下部へ押し下げない（パネルの中に空きを作らない） */
 .side .sb{padding:0 0 0 8mm;display:flex;flex-direction:column;min-height:0}
 /* レバー矢印表 */
 .lev{width:100%;border-collapse:collapse;font-size:11.5pt}
@@ -139,7 +147,7 @@ table.eq{table-layout:fixed}
 .lev .up{background:var(--accent)}.lev .dn{background:var(--rule);color:var(--navy)}
 /* 状態ヒートマップ */
 .hm{width:100%;border-collapse:collapse;font-size:9.5pt}
-.hm th{font-size:10.5pt;padding:2mm}
+.hm th{font-size:13pt;padding:2mm} /* 見出し行は行見出し（12.5pt）より大きく（§6） */
 .hm td{padding:2.2mm 2.5mm;border-bottom:1px solid var(--hairline)}
 .hm .cell{display:block;height:8mm}
 /* 4=大きく改善 3=改善 0=横ばい 2=悪化（悪化だけ意味のある赤。§5.8） */
@@ -174,8 +182,8 @@ table.eq{table-layout:fixed}
 .clip .cg{align-self:flex-start;background:var(--navy);color:#fff;font-size:7.5pt;font-weight:700;padding:1mm 2.5mm;letter-spacing:.06em}
 /* 対向シェブロン */
 .opp{display:grid;grid-template-columns:1fr 46mm 1fr;gap:6mm;flex:1;min-height:0;align-items:stretch}
-.opp .ol{display:flex;flex-direction:column}
-.opp .ol .oi{flex:1;display:flex;align-items:center;font-size:10pt;line-height:1.55;color:var(--navy);border-bottom:1px solid var(--rule);padding:2mm 0}
+.opp .ol{display:flex;flex-direction:column;justify-content:center} /* 行は中身の高さで上下中央（§4.12） */
+.opp .ol .oi{display:flex;align-items:center;font-size:11.5pt;line-height:1.45;color:var(--navy);border-bottom:1px solid var(--rule);padding:3mm 0}
 .opp .ol .oi:last-child{border-bottom:0}
 .opp .oc{display:flex;flex-direction:column;gap:3mm;justify-content:center}
 .opp .oc .ob{background:var(--navy);color:#fff;text-align:center;font-family:var(--font-serif);font-size:14pt;font-weight:700;padding:9mm 3mm;clip-path:polygon(0 0,100% 0,100% 78%,50% 100%,0 78%)}
@@ -183,8 +191,7 @@ table.eq{table-layout:fixed}
 
 /* 縦の余白つぶし（slide-rules §4.5 下端揃え・§4.12 不自然な下部余白の禁止） */
 .grid>div{display:flex;flex-direction:column;min-height:0}
-.grid>div>.rows{flex:1;display:flex;flex-direction:column}
-.grid>div>.rows .r{flex:1;align-items:center}
+.grid>div>.rows{display:flex;flex-direction:column}
 .two>div>table{flex:0 1 auto;height:auto}
 .two>div>table tr:first-child{height:1px}
 .pil .p{justify-content:center}

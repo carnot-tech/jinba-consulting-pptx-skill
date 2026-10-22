@@ -697,6 +697,688 @@ class PptxVideoAndExternal(unittest.TestCase):
             self.assertIn("p:videoFile", xml.replace("a:videoFile", "p:videoFile"))
 
 
+class TypeIdLeftover(unittest.TestCase):
+    """check_deck：パーツの英語の型ID（「05  chart_insight」）が残っていたら FAIL"""
+
+    def test_type_id_fails(self):
+        code, fails = run(inject("<span>3</span>", "<span>3</span><i>05  chart_insight</i>"))
+        self.assertTrue(any("型ID" in l for l in fails), fails)
+
+    def test_good_deck_has_no_type_id(self):
+        self.assertFalse(any("型ID" in l for l in run(GOOD)[1]))
+
+    def test_table_number_and_snake_case_is_not_type_id(self):
+        # 表の「05」「user_id」のような並びは型IDではない
+        code, fails = run(inject("<span>3</span>", "<span>3</span><table><tr><td>05</td><td>user_id</td></tr></table>"))
+        self.assertFalse(any("型ID" in l for l in fails), fails)
+
+    def test_single_word_type_id_fails(self):
+        for tid in ("34  gantt", "15  matrix_2x2"):
+            code, fails = run(inject("<span>3</span>", f"<span>3</span><i>{tid}</i>"))
+            self.assertTrue(any("型ID" in l for l in fails), (tid, fails))
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class BarAxisAndColors(LayoutFeedback20261012):
+    """check_layout：棒グラフの項目名が軸の線より上（§5.26）・下端のずれ・凡例なしの色分け（§5.5）"""
+
+    def chart(self, labels_below=True, colors=("#322014",) * 4, legend=""):
+        wrap = "position:relative;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%"
+        lab = "position:absolute;top:calc(100% + 8px);left:0;right:0;text-align:center" if labels_below else "margin-top:8px;text-align:center"
+        bars = "".join(f'<div style="{wrap}"><div>{v}</div><div style="width:70%;height:{v}%;background:{c}"></div><div style="{lab}">部門{i}</div></div>'
+                       for i, (v, c) in enumerate(zip((30, 50, 70, 90), colors)))
+        return (f'{legend}<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:20px;height:300px;'
+                f'border-bottom:2px solid #333;margin-bottom:52px">{bars}</div>')
+
+    def test_labels_above_axis_warn(self):
+        out = self.layout(self.chart(labels_below=False))
+        self.assertTrue(any("軸の線より上" in l for l in out), out)
+
+    def test_labels_below_axis_pass(self):
+        out = self.layout(self.chart())
+        self.assertFalse(any("軸の線より上" in l or "下端が" in l for l in out), out)
+
+    def test_colors_without_legend_warn(self):
+        out = self.layout(self.chart(colors=("#322014", "#C5A681", "#5A3921", "#322014")))
+        self.assertTrue(any("凡例が無い" in l for l in out), out)
+
+    def test_colors_with_legend_pass(self):
+        out = self.layout(self.chart(colors=("#322014", "#C5A681", "#5A3921", "#322014"), legend='<div class="legend">凡例</div>'))
+        self.assertFalse(any("凡例が無い" in l for l in out), out)
+
+    def test_single_accent_bar_pass(self):
+        # 目を向けたい1本だけ色を変えるのは推奨どおり（§5.26/§5.5）
+        out = self.layout(self.chart(colors=("#322014", "#322014", "#322014", "#C5A681")))
+        self.assertFalse(any("凡例が無い" in l for l in out), out)
+
+    def test_card_below_chart_is_not_axis(self):
+        # 棒の下に置いた下罫つきのカードを軸と取り違えない
+        out = self.layout(self.chart().replace("border-bottom:2px solid #333;margin-bottom:52px", "margin-bottom:0")
+                          + '<div style="border-bottom:1px solid #ccc;padding:40px 8px 8px">補足のカード</div>')
+        self.assertFalse(any("軸の線より上" in l for l in out), out)
+
+    def test_two_charts_side_by_side_checked_separately(self):
+        # 2カラムに並んだ2つの棒グラフを1つに合流させない（棒を器の直下に並べる作り）
+        def bars(hs, colors):
+            return "".join(f'<div style="width:50px;height:{h}px;background:{c}"></div>' for h, c in zip(hs, colors))
+        one = "display:flex;align-items:flex-end;gap:16px;height:260px;border-bottom:2px solid #333"
+        body = (f'<div style="display:flex;gap:80px"><div style="{one}">{bars((80, 140, 220), ("#322014", "#322014", "#C5A681"))}</div>'
+                f'<div style="{one}">{bars((60, 120, 180, 200), ("#322014",) * 4)}</div></div>')
+        out = self.layout(body)
+        self.assertFalse(any("凡例が無い" in l or "下端が" in l for l in out), out)
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class RowSlackAndHeadingSize(LayoutFeedback20261012):
+    """check_layout：表の行の間延び（§4.12）・見出しが下の文字より小さい（§6・§4.21）"""
+
+    ROWS = "".join(f'<tr><td style="padding:{{p}};line-height:{{lh}}">部門{i}</td><td style="padding:{{p}};line-height:{{lh}}">月に約{i}0件を処理する</td></tr>' for i in range(1, 4))
+
+    def test_loose_rows_warn(self):
+        out = self.layout("<table>" + self.ROWS.format(p="5mm 2mm", lh="1.7") + "</table>")
+        self.assertTrue(any("間延び" in l for l in out), out)
+
+    def test_tight_rows_pass(self):
+        out = self.layout("<table>" + self.ROWS.format(p="2.5mm 2mm", lh="1.4") + "</table>")
+        self.assertFalse(any("間延び" in l for l in out), out)
+
+    def test_small_heading_warns(self):
+        body = '<h3 style="font-size:12px">部門ごとの件数</h3><div><p style="font-size:18px">営業部は月に約120件を処理する</p></div>'
+        self.assertTrue(any("その下の文字より小さい" in l for l in self.layout(body)))
+
+    def test_big_heading_passes(self):
+        body = '<h3 style="font-size:20px">部門ごとの件数</h3><div><p style="font-size:15px">営業部は月に約120件を処理する</p><p style="font-size:30px">72%</p></div>'
+        self.assertFalse(any("その下の文字より小さい" in l for l in self.layout(body)))
+
+
+class StructureF(unittest.TestCase):
+    """要点版と正本のずれ・出典の照合・check_all の動作"""
+
+    def test_digest_refs_exist_in_canon(self):
+        digest = (ROOT / "references" / "rules-digest.md").read_text(encoding="utf8")
+        refs = sorted(set(re.findall(r"§(\d+\.\d+)", digest)))
+        self.assertTrue(refs)
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "rules.py"), "--sec", *refs], capture_output=True, text=True)
+        self.assertNotIn("見つからない", r.stderr, r.stderr)
+
+    def test_digest_has_all_phases(self):
+        digest = (ROOT / "references" / "rules-digest.md").read_text(encoding="utf8")
+        for ph in ("plan", "build", "chart", "table", "process", "text", "check"):
+            self.assertIn(f"## {ph}", digest)
+
+    def test_sources_missing_number_warns(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "sources.md"
+            src.write_text("# 出典\n- 月に約120件 社内集計\n", encoding="utf8")
+            deck = Path(d) / "deck.html"
+            deck.write_text(GOOD, encoding="utf8")
+            r = subprocess.run([sys.executable, str(CHECK), str(deck), *NO_BRAND, "--sources", str(src)], capture_output=True, text=True)
+        self.assertIn("出典の控えに無い数字", r.stdout)
+
+    def test_sources_match_is_not_substring(self):
+        # 控えの「2025」が本文の「5万人」「20倍」を通さない（数字は前後が数字でない境界で照合する）
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "sources.md"
+            src.write_text("# 出典\n- 2025年 社内集計\n", encoding="utf8")
+            deck = Path(d) / "deck.html"
+            deck.write_text(inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "利用者は5万人、処理は20倍に増える"), encoding="utf8")
+            r = subprocess.run([sys.executable, str(CHECK), str(deck), *NO_BRAND, "--sources", str(src)], capture_output=True, text=True)
+        line = next((l for l in r.stdout.splitlines() if "出典の控えに無い数字" in l), "")
+        self.assertIn("「5万」", line)
+        self.assertIn("「20倍」", line)
+
+    def test_sources_match_with_thousands_separator(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "sources.md"
+            src.write_text("# 出典\n- 12,000件 社内集計\n", encoding="utf8")
+            deck = Path(d) / "deck.html"
+            deck.write_text(inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "申請は年12000件に達する"), encoding="utf8")
+            r = subprocess.run([sys.executable, str(CHECK), str(deck), *NO_BRAND, "--sources", str(src)], capture_output=True, text=True)
+        self.assertNotIn("「12000件」", r.stdout)
+
+    def test_check_all_fails_when_a_checker_crashes(self):
+        # check_deck が途中で落ちたら（ここでは無いファイル）、0 FAIL として通さず非0で終わる
+        with tempfile.TemporaryDirectory() as d:
+            r = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_all.py"), str(Path(d) / "nope.html")],
+                               capture_output=True, text=True, cwd=d)
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("最後まで動いていない", r.stderr)
+        self.assertNotIn("0 FAIL", r.stdout)
+
+    def test_sources_file_required(self):
+        with tempfile.TemporaryDirectory() as d:
+            deck = Path(d) / "deck.html"
+            deck.write_text(GOOD, encoding="utf8")
+            r = subprocess.run([sys.executable, str(CHECK), str(deck), *NO_BRAND, "--sources", str(Path(d) / "nope.md")], capture_output=True, text=True)
+        self.assertIn("出典の控え", r.stdout)
+        self.assertEqual(r.returncode, 1)
+
+    @unittest.skipUnless(_has_playwright(), "playwright が要る")
+    def test_check_all_groups_by_page(self):
+        with tempfile.TemporaryDirectory() as d:
+            deck = Path(d) / "deck.html"
+            deck.write_text(GOOD, encoding="utf8")
+            r = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_all.py"), str(deck)], capture_output=True, text=True, cwd=d)
+        self.assertIn("FAIL /", r.stdout)
+        self.assertIn("== タイトル一覧", r.stdout)
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class LayoutFeedback20261020(LayoutFeedback20261012):
+    """check_layout：文字と罫線の重なり・同じ作りの箱の左端のずれ・行のリストの間延び・左右の行のずれ（WARN）"""
+
+    def test_text_over_rule_warns(self):
+        body = ('<div style="height:40px;border-bottom:2px solid #333">指標名、単位</div>'
+                '<div style="margin-top:-18px;font-size:20px;font-weight:700">48.5</div><div style="height:300px;border:1px solid #333">図</div>')
+        self.assertTrue(any("罫線に重なっている" in l for l in self.layout(body)))
+
+    def test_text_clear_of_rule_passes(self):
+        body = '<div style="height:40px;border-bottom:2px solid #333">指標名、単位</div><div style="margin-top:12px;font-size:20px">48.5</div><div style="height:300px;border:1px solid #333">図</div>'
+        self.assertFalse(any("罫線に重なっている" in l for l in self.layout(body)))
+
+    def test_box_left_edge_misaligned_warns(self):
+        box = '<div class="lf" style="border:1px solid #999;padding:6px;margin-left:{m}px;width:300px">申請の内容を確かめる</div>'
+        body = "".join(box.format(m=m) for m in (100, 130, 112)) + '<div style="height:250px;border:1px solid #333">図</div>'
+        self.assertTrue(any("左端が" in l for l in self.layout(body)))
+
+    def test_box_left_edge_aligned_passes(self):
+        box = '<div class="lf" style="border:1px solid #999;padding:6px;margin-left:100px;width:300px">申請の内容を確かめる</div>'
+        body = box * 3 + '<div style="height:250px;border:1px solid #333">図</div>'
+        self.assertFalse(any("左端が" in l for l in self.layout(body)))
+
+    ROW = '<div style="border-bottom:1px solid #ccc;padding:{p};display:flex;align-items:center">部門{i}は月に約{i}0件を処理する</div>'
+
+    def test_stretched_row_list_warns(self):
+        rows = "".join(self.ROW.format(p="9mm 0", i=i) for i in range(1, 5))
+        self.assertTrue(any("行のリストの上下が間延び" in l for l in self.layout(f"<div>{rows}</div>")))
+
+    def test_tight_row_list_passes(self):
+        rows = "".join(self.ROW.format(p="3mm 0", i=i) for i in range(1, 5))
+        self.assertFalse(any("行のリストの上下が間延び" in l for l in self.layout(f"<div>{rows}</div>")))
+
+    def test_rows_misaligned_across_columns_warns(self):
+        left = "".join(self.ROW.format(p="3mm 0", i=i) for i in range(1, 4))
+        right = "".join(self.ROW.format(p="3mm 0" if i != 1 else "8mm 0", i=i) for i in range(1, 4))
+        body = f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px"><div>{left}</div><div>{right}</div></div>'
+        self.assertTrue(any("行の位置が" in l for l in self.layout(body)))
+
+
+class MetaTitle(unittest.TestCase):
+    """check_deck：作業の説明のタイトル（「〜を3つに分ける」「〜を示す」「〜を整理する」は WARN、「〜ごとに…を整理する」「〜を一覧にする」は FAIL）"""
+
+    def test_meta_title_warns(self):
+        html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "承認が遅れる理由を3つに分ける")
+        self.assertTrue(any("作業の説明" in l for l in warns(html)))
+
+    def test_claim_title_passes(self):
+        self.assertFalse(any("作業の説明" in l for l in warns(GOOD)))
+
+    def test_seiri_ending_fails(self):
+        html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "打ち手ごとに担当・時期・効果を整理する")
+        self.assertTrue(any("作業の説明で終わっている" in l for l in run(html)[1]))
+
+    def test_action_with_seiri_ending_is_warn_not_fail(self):
+        # 打ち手の言い切り（「承認フローを整理する」「重複した窓口をまとめる」）は FAIL にしない
+        for t in ("承認フローを整理する", "重複した窓口をまとめる"):
+            html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", t)
+            self.assertFalse(any("作業の説明" in l for l in run(html)[1]), t)
+            self.assertTrue(any("で終わっている" in l for l in warns(html)), t)
+
+    def test_shimesu_ending_warns(self):
+        html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "承認待ちの日数の推移を示す")
+        self.assertTrue(any("作業の説明で終わっている" in l for l in warns(html)))
+
+
+class WorkFilesInDeck(unittest.TestCase):
+    """check_deck：デッキに作り手の控え（sources.md など）のファイル名が出ていたら FAIL（§2.23）"""
+
+    def test_sources_md_in_note_fails(self):
+        html = GOOD.replace("出典：架空データ（説明用）", "出典：架空データ（説明用）。試算の前提は sources.md 参照", 1)
+        self.assertTrue(any("作り手の控え" in l for l in run(html)[1]))
+
+    def test_sources_md_after_japanese_fails(self):
+        html = GOOD.replace("出典：架空データ（説明用）", "出典：架空データ（算式は添付のsources.mdを参照）", 1)
+        self.assertTrue(any("作り手の控え" in l for l in run(html)[1]))
+
+    def test_good_deck_passes(self):
+        self.assertFalse(any("作り手の控え" in l for l in run(GOOD)[1]))
+
+
+class FrameworkLabelsAndCommas(unittest.TestCase):
+    """check_deck：思考の枠組みの名前の見出し（FAIL）、日本語の文の中の半角カンマ（WARN）（§7.32）"""
+
+    def test_framework_label_fails(self):
+        html = GOOD.replace('<div class="l">現状</div>', '<div class="l">Situation</div>', 1)
+        self.assertTrue(any("思考の枠組みの名前" in l for l in run(html)[1]))
+
+    def test_half_comma_warns(self):
+        html = GOOD.replace("差し戻しの6割は添付漏れ", "差し戻しの6割は添付漏れ,残りは記入誤り", 1)
+        self.assertTrue(any("半角カンマ" in l for l in warns(html)))
+
+    def test_good_deck_passes(self):
+        self.assertFalse(any("思考の枠組みの名前" in l or "半角カンマ" in l for l in run(GOOD)[1] + warns(GOOD)))
+
+
+class DashAndPlaceholders(unittest.TestCase):
+    """check_deck：「—」で語句をつなぐ（FAIL。§7.1）、XXXX などの伏せ字（FAIL）"""
+
+    def test_dash_link_fails(self):
+        html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "業務自動化 — 承認待ちを当日に縮める")
+        self.assertTrue(any("「—」で語句をつないでいる" in l for l in run(html)[1]))
+
+    def test_dash_link_does_not_depend_on_spaces(self):
+        # 空白の数やタグの組み方で結果が変わらない: 文中のつなぎは空白がいくつでも FAIL、セル単独の「—」は空白が重なっても可
+        for body in ("<p>前年比  —  横ばい</p>", "<p>前年比<span> — </span>横ばい</p>"):
+            html = GOOD.replace("差し戻しの6割は添付漏れ", "差し戻しの6割は添付漏れ" + body, 1)
+            self.assertTrue(any("「—」で語句をつないでいる" in l for l in run(html)[1]), body)
+        html = GOOD.replace("差し戻しの6割は添付漏れ", "差し戻しの6割は添付漏れ<table><tr><td>前年比</td><td>   —   </td></tr></table>", 1)
+        self.assertFalse(any("「—」で語句をつないでいる" in l for l in run(html)[1]))
+
+    def test_placeholder_xxxx_fails(self):
+        html = GOOD.replace("差し戻しの6割は添付漏れ", "差し戻しの6割は添付漏れ（内線 XXXX）", 1)
+        self.assertTrue(any("プレースホルダー" in l for l in run(html)[1]))
+
+    def test_good_deck_passes(self):
+        self.assertFalse(any("「—」" in l or "プレースホルダー" in l for l in run(GOOD)[1]))
+
+
+class CoverPlaceholder(unittest.TestCase):
+    """check_deck：表紙・裏表紙に見本の文言（当社・会社名・連絡先・「表紙」のラベル）が残っていたら FAIL"""
+
+    def test_back_cover_placeholder_fails(self):
+        last = GOOD.rfind('<section class="s cover">')
+        html = GOOD[:last] + GOOD[last:].replace('<section class="s cover">', '<section class="s cover"><div>当社</div>', 1)
+        self.assertTrue(any("見本の文言" in l for l in run(html)[1]))
+
+    def test_cover_type_label_fails(self):
+        html = GOOD.replace('<section class="s cover">', '<section class="s cover"><div>表紙</div>', 1)
+        self.assertTrue(any("見本の文言が残っている「表紙」" in l for l in run(html)[1]))
+
+    def test_good_deck_cover_passes(self):
+        self.assertFalse(any("見本の文言" in l for l in run(GOOD)[1]))
+
+    def test_last_content_page_is_not_back_cover(self):
+        # 裏表紙の無いデッキの最終ページの比較表「当社 / 競合A」は見本の文言ではない
+        page = ('<section class="s"><h1>当社は導入の速さで競合を上回る</h1><table><tr><th>当社</th><th>競合A</th></tr>'
+                '<tr><td>2週間</td><td>3か月</td></tr></table><div class="foot"><span>9</span></div></section>')
+        last = GOOD.rfind('<section class="s cover">')
+        html = GOOD[:last] + page + "</body></html>"
+        self.assertFalse(any("見本の文言" in l for l in run(html)[1]))
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class LayoutReview20261021(LayoutFeedback20261012):
+    """check_layout：レビューの指摘（PR #39）の再現"""
+
+    def run_layout(self, html):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "deck.html"
+            p.write_text(html, encoding="utf8")
+            r = subprocess.run(["node", str(ROOT / "scripts" / "check_layout.mjs"), str(p)],
+                               capture_output=True, text=True, cwd=ROOT, encoding="utf8")
+        return r.stdout
+
+    def test_label_and_bar_list_is_not_stretched(self):
+        # ラベル＋塗りのバー（文字なし div）の縦並びは、バーの高さを空きに数えない
+        row = '<div><div style="font-size:12px">{t}</div><div style="height:40px;background:#8a5a3c"></div></div>'
+        body = '<div style="width:600px">' + "".join(row.format(t=t) for t in ("東日本", "西日本", "九州")) + "</div>"
+        self.assertFalse(any("並べた項目の間" in l for l in self.layout(body)))
+        flat = ('<div style="width:600px">' + "".join(f'<div style="font-size:12px">{t}</div><div style="height:40px;background:#8a5a3c"></div>'
+                                                      for t in ("東日本", "西日本", "九州")) + "</div>")
+        self.assertFalse(any("並べた項目の間" in l for l in self.layout(flat)))
+
+    def test_white_rules_on_dark_background_are_compared(self):
+        # 濃色の背景の白い区切り線の太さの不揃いは検出する（白を一律に外さない）
+        body = ('<div style="background:#3b2a20;padding:20px;height:300px">'
+                '<div class="sep" style="border-top:1px solid #fff;color:#fff">申請</div>'
+                '<div class="sep" style="border-top:3px solid #fff;color:#fff">承認</div></div>')
+        out = self.run_layout(GOOD.replace("</body>", f'<section class="s"><h1>検査の見本として置いたページのタイトル</h1>{body}'
+                                                       '<div class="foot"><span>9</span></div></section></body>', 1))
+        self.assertIn("div.sep:top", out)
+
+    def test_zoom_hint_checks_right_edge(self):
+        # 列幅を mm で固定した表は、拡大すると右端を越える。文字の下端だけで「はみ出しなし」と勧めず、拡大では直らないと言う
+        body = '<div class="c"><table style="table-layout:fixed;width:310mm"><tr><td>申請</td><td>承認</td></tr></table></div>'
+        line = next((l for l in self.layout(body) if "が空いている" in l), "")
+        self.assertIn("1.05倍にするだけで版面からはみ出す", line)
+        self.assertNotIn("zoom:", line)
+
+    def test_div_slide_deck_pdf_pages_are_compared(self):
+        # <div class="slide"> のデッキでも PDF のページ数の照合が動く（メイン検査と同じセレクタ）
+        page = ('<div class="slide" style="width:338.67mm;height:190.5mm;page-break-after:always;overflow:hidden">'
+                '<h1>{t}</h1><p>本文</p></div>')
+        html = ('<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>@page{size:338.67mm 190.5mm;margin:0}'
+                'body{margin:0}</style></head><body>' + page.format(t="一枚目のタイトル") + page.format(t="二枚目のタイトル")
+                + '<div class="slide" style="width:338.67mm;height:400mm"><h1>高すぎる三枚目</h1></div></body></html>')
+        self.assertIn("PDF が", self.run_layout(html))
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class UnevenWrap(LayoutFeedback20261012):
+    """check_layout：並べた見出しのうち一部だけが折れている（WARN）"""
+
+    def cols(self, titles):
+        cell = '<div><h3 style="font-size:20px;font-weight:700;margin:0">{t}</h3><p>説明の文</p></div>'
+        return ('<div style="display:grid;grid-template-columns:repeat(4,160px);gap:20px">'
+                + "".join(cell.format(t=t) for t in titles) + '</div><div style="height:260px;border:1px solid #333">図</div>')
+
+    def test_one_heading_wrapped_warns(self):
+        out = self.layout(self.cols(["土台づくり", "試行", "本番化", "成果検証と全社への拡大判断"]))
+        self.assertTrue(any("折れている" in l for l in out), out)
+
+    def test_all_one_line_passes(self):
+        out = self.layout(self.cols(["土台づくり", "試行", "本番化", "拡大判断"]))
+        self.assertFalse(any("折れている" in l for l in out), out)
+
+
+CHROME_APP = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+
+class HeadlessShell(unittest.TestCase):
+    """PDF 化は Chromium headless shell で行い、Chrome 本体と同じ出力になること"""
+
+    def test_chrome_path_overrides(self):
+        import os
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "find_browser.py")], capture_output=True, text=True,
+                           env={**os.environ, "CHROME_PATH": "/opt/custom/chrome"})
+        self.assertEqual(r.stdout.strip(), "/opt/custom/chrome")
+
+    @unittest.skipUnless(Path(CHROME_APP).exists(), "Chrome 本体が要る（比較の基準）")
+    def test_headless_shell_pdf_matches_chrome(self):
+        import shutil
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from find_browser import headless_shell
+        hs = headless_shell()
+        if not hs or not shutil.which("pdftoppm"):
+            self.skipTest("headless shell（npm run setup）と pdftoppm が要る")
+        from PIL import Image, ImageChops
+        with tempfile.TemporaryDirectory() as d:
+            deck = Path(d) / "deck.html"
+            deck.write_text(GOOD, encoding="utf8")
+            outs = {}
+            for name, exe in (("hs", hs), ("chrome", CHROME_APP)):
+                pdf = Path(d) / f"{name}.pdf"
+                subprocess.run([exe, "--headless", "--disable-gpu", "--no-pdf-header-footer", f"--print-to-pdf={pdf}", str(deck)],
+                               capture_output=True, check=True, timeout=120)
+                subprocess.run(["pdftoppm", "-r", "40", "-png", str(pdf), str(Path(d) / name)], check=True)
+                outs[name] = sorted(Path(d).glob(f"{name}-*.png"))
+            self.assertEqual(len(outs["hs"]), len(outs["chrome"]))
+            for a, b in zip(outs["hs"], outs["chrome"]):
+                ia, ib = Image.open(a).convert("L"), Image.open(b).convert("L")
+                self.assertEqual(ia.size, ib.size)
+                diff = ImageChops.difference(ia, ib)
+                changed = sum(1 for v in diff.getdata() if v > 40) / (ia.size[0] * ia.size[1])
+                self.assertLess(changed, 0.005, f"{a.name} が Chrome 本体と {changed:.2%} 違う")
+
+
+class CountTitles(unittest.TestCase):
+    """check_deck：数で束ねたタイトル（「3つの」「3本の」「3点」）が3枚以上なら FAIL（§4.103）"""
+
+    def test_three_count_titles_fail(self):
+        html = GOOD
+        for old, new in (("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "承認の遅れは3つの壁で起きている"),):
+            html = html.replace(old, new, 1)
+        html = html.replace("</body>", "".join(f'<section class="s"><h1>{t}</h1><div class="foot"><span>9</span></div></section>'
+                                                for t in ("来期は3本柱で進める", "論点は2点に絞られる")) + "</body>", 1)
+        self.assertTrue(any("数で束ねたタイトル" in l for l in run(html)[1]))
+
+    def test_ordinal_and_soft_counts_do_not_fail(self):
+        # 「第2段階」は序数、「3点を承認いただく」「2段階で進める」は数を材料に言っているだけのこともある → FAIL にしない（WARN 止まり）
+        html = inject("差し戻しの削減と承認の自動化で、承認待ちを当日に縮める", "第2段階で全社展開に進む")
+        html = html.replace("</body>", "".join(f'<section class="s"><h1>{t}</h1><div class="foot"><span>9</span></div></section>'
+                                                for t in ("本日は3点を承認いただく", "導入は2段階で進める", "承認の遅れは3つの壁で起きている")) + "</body>", 1)
+        self.assertFalse(any("数で束ねたタイトル" in l for l in run(html)[1]))
+        self.assertTrue(any("数を前に出したタイトル" in l for l in warns(html)))
+
+    def test_good_deck_passes(self):
+        self.assertFalse(any("数で束ねたタイトル" in l for l in run(GOOD)[1] + warns(GOOD)))
+
+
+class PartVariant(unittest.TestCase):
+    """new_deck.py：b09:axb で軸ボックスの表になる"""
+
+    def test_axb_variant(self):
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "new_deck.py"), "--show", "b09:axb"], capture_output=True, text=True)
+        self.assertIn('<table class="axb"', r.stdout)
+
+    def test_unknown_variant_fails(self):
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "new_deck.py"), "--show", "b09:zzz"], capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class SpreadItems(LayoutFeedback20261012):
+    """check_layout：項目の間を広げて版面を埋める間延び（FAIL）と、縦の線の列が伸びて中が空く（WARN）（§4.12）"""
+
+    def ul(self, spread):
+        st = "height:120mm;display:flex;flex-direction:column;justify-content:space-around" if spread else ""
+        return f'<ul style="{st};font-size:11pt">' + "".join(f"<li>項目{i}の説明を一文で書く</li>" for i in range(1, 4)) + "</ul>"
+
+    def test_spread_list_fails(self):
+        self.assertTrue(any("並べた項目の間" in l and l.startswith("FAIL") for l in self.layout(self.ul(True))))
+
+    def test_compact_list_passes(self):
+        self.assertFalse(any("並べた項目の間" in l for l in self.layout(self.ul(False))))
+
+    def cols(self, stretch):
+        h = "height:110mm;" if stretch else ""
+        col = '<div class="ph" style="{h}border-right:1px solid #ccc;padding:3mm"><b>時期{i}</b><div>中身{i}を書く</div></div>'
+        return '<div style="display:grid;grid-template-columns:repeat(4,1fr)">' + "".join(col.format(h=h, i=i) for i in range(1, 5)) + "</div>"
+
+    def test_stretched_columns_warn(self):
+        self.assertTrue(any("縦の線で区切った列が伸び" in l for l in self.layout(self.cols(True))))
+
+    def test_content_height_columns_pass(self):
+        self.assertFalse(any("縦の線で区切った列が伸び" in l for l in self.layout(self.cols(False))))
+
+    def cards(self, split):
+        st = "height:110mm;display:flex;flex-direction:column;" if split else ""
+        ul = '<ul style="margin-top:auto">' if split else "<ul>"
+        card = f'<div class="cd" style="{st}background:#eee;padding:4mm"><b>柱{{i}}の名前</b><div>柱{{i}}の中身を一文で書く</div>{ul}<li>対象{{i}}</li><li>時期{{i}}</li></ul></div>'
+        return '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5mm">' + "".join(card.format(i=i) for i in range(1, 4)) + "</div>"
+
+    def test_split_card_fails(self):
+        self.assertTrue(any("真ん中が" in l and l.startswith("FAIL") for l in self.layout(self.cards(True))))
+
+    def test_compact_card_passes(self):
+        self.assertFalse(any("真ん中が" in l for l in self.layout(self.cards(False))))
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class TitleSizeAndPdfPages(LayoutFeedback20261012):
+    """check_layout：タイトルが22ptから±10%超ずれる（FAIL。§2.1）、PDF のページ数がスライドの枚数と合わない（FAIL）"""
+
+    def full(self, html):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "deck.html"
+            p.write_text(html, encoding="utf8")
+            r = subprocess.run(["node", str(ROOT / "scripts" / "check_layout.mjs"), str(p)], capture_output=True, text=True, cwd=ROOT, encoding="utf8")
+        return r.stdout
+
+    def test_big_title_fails(self):
+        html = GOOD.replace("</style>", ".s h1{font-size:30pt}</style>", 1)
+        self.assertIn("タイトルの大きさが既定の22pt", self.full(html))
+
+    def test_overflowing_page_splits_pdf(self):
+        html = GOOD.replace("</style>", ".s.cover{height:auto;min-height:200mm;overflow:visible}</style>", 1)
+        self.assertIn("PDF が", self.full(html))
+
+    def test_source_line_inside_footer_fails(self):
+        html = GOOD.replace('<div class="src">出典：架空データ（説明用）</div>', '<div class="src" style="position:absolute;left:16mm;bottom:6mm">出典：架空データ（説明用）</div>', 1)
+        self.assertIn("フッターと本文が重なる", self.full(html))
+
+    def test_good_deck_passes(self):
+        out = self.full(GOOD)
+        self.assertNotIn("タイトルの大きさが既定の22pt", out)
+        self.assertNotIn("PDF が", out)
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class DividerAboveHeader(LayoutFeedback20261012):
+    """check_layout：表の列の区切り線・行の軸の縦線が見出しの行まで伸びている（WARN。§6）"""
+
+    def table(self, head_divider):
+        th = "border-bottom:2px solid #333;" + ("border-left:1px dotted #999;" if head_divider else "")
+        rows = "".join(f'<tr><td>部門{i}</td><td style="border-left:1px dotted #999">月に約{i}0件</td><td style="border-left:1px dotted #999">担当{i}名</td></tr>' for i in range(1, 4))
+        return (f'<table style="border-collapse:collapse"><tr><th style="border-bottom:2px solid #333">部門</th><th style="{th}">件数</th>'
+                f'<th style="{th}">担当</th></tr>{rows}</table><div style="height:250px;border:1px solid #333">図</div>')
+
+    def test_divider_in_header_warns(self):
+        self.assertTrue(any("縦の線が見出しの行まで" in l for l in self.layout(self.table(True))))
+
+    def test_divider_only_in_body_passes(self):
+        self.assertFalse(any("縦の線が見出しの行まで" in l for l in self.layout(self.table(False))))
+
+    def axis_table(self, head_line):
+        th0 = "border-bottom:2px solid #333;" + ("border-right:2px solid #333;" if head_line else "")
+        rows = "".join(f'<tr><td style="border-right:2px solid #333;font-weight:700">部門{i}</td><td>月に約{i}0件</td><td>担当{i}名</td></tr>' for i in range(1, 4))
+        return (f'<table style="border-collapse:collapse"><tr><th style="{th0}">部門</th><th style="border-bottom:2px solid #333">件数</th>'
+                f'<th style="border-bottom:2px solid #333">担当</th></tr>{rows}</table><div style="height:250px;border:1px solid #333">図</div>')
+
+    def test_axis_line_in_header_warns(self):
+        self.assertTrue(any("縦の線が見出しの行まで" in l for l in self.layout(self.axis_table(True))))
+
+    def test_axis_line_only_in_body_passes(self):
+        self.assertFalse(any("縦の線が見出しの行まで" in l for l in self.layout(self.axis_table(False))))
+
+
+class ReviewFixes20261022(unittest.TestCase):
+    """check_deck・check_all：中黒1つでタイトルの判定が逆転しない・罫線の階層表記・定型ページの出典照合・sources.md の探し方"""
+
+    T = "差し戻しの削減と承認の自動化で、承認待ちを当日に縮める"
+
+    def page(self, body, cls="s"):
+        return f'<section class="{cls}"><h1>検査の見本として置いたページのタイトル</h1>{body}<div class="foot"><span>5</span></div></section>'
+
+    def test_action_title_with_nakaguro_is_warn_not_fail(self):
+        # 中黒があっても打ち手の言い切りは FAIL にしない（中黒の有無で判定が逆転しない）
+        for t in ("申請・承認の重複した窓口をまとめる", "部門ごとに申請・承認の窓口をまとめる"):
+            html = inject(self.T, t)
+            self.assertFalse(any("作業の説明" in l for l in run(html)[1]), t)
+            self.assertTrue(any("で終わっている" in l for l in warns(html)), t)
+
+    def test_tree_branch_is_not_dash_link(self):
+        # 「├─ 項目」のような階層表記は語句のつなぎではない
+        html = GOOD.replace("差し戻しの6割は添付漏れ", "差し戻しの6割は添付漏れ<p>├─ 調達コスト</p><p>└─ 物流コスト</p>", 1)
+        self.assertFalse(any("「—」で語句をつないでいる" in l for l in run(html)[1]))
+
+    def test_box_drawing_dash_with_spaces_still_fails(self):
+        html = GOOD.replace("差し戻しの6割は添付漏れ", "差し戻しの6割は添付漏れ<p>前年比 ─ 横ばい</p>", 1)
+        self.assertTrue(any("「—」で語句をつないでいる" in l for l in run(html)[1]))
+
+    def test_sources_skip_std_page(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "sources.md"
+            src.write_text("# 出典\n- 月約1,200件 社内集計\n", encoding="utf8")
+            deck = Path(d) / "deck.html"
+            out = []
+            for cls in ("s", "s std"):
+                deck.write_text("<html><body>" + self.page("<p>申請は月約1,200件</p>") + self.page("<p>従業員は4,321人</p>", cls) + "</body></html>", encoding="utf8")
+                r = subprocess.run([sys.executable, str(CHECK), str(deck), *NO_BRAND, "--sources", str(src)], capture_output=True, text=True)
+                out.append(r.stdout)
+        self.assertIn("「4,321人」", out[0])
+        self.assertNotIn("「4,321人」", out[1])
+
+    def test_cover_title_and_subtitle_do_not_warn(self):
+        # class に cover/chap/back が付いたページのタイトル無し・サブタイトルは WARN にしない。本文ページのサブタイトルは WARN
+        w = warns(GOOD)
+        self.assertFalse(any("タイトルが空" in l or "`.sub`" in l for l in w), w)
+        w = warns(GOOD.replace("</body>", self.page('<div class="sub">本文ページの補足</div>') + "</body>", 1))
+        self.assertTrue(any("`.sub` ×1" in l for l in w), w)
+
+    def test_check_all_sources_without_value_exits_with_reason(self):
+        with tempfile.TemporaryDirectory() as d:
+            deck = Path(d) / "deck.html"
+            deck.write_text(GOOD, encoding="utf8")
+            r = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_all.py"), str(deck), "--sources"],
+                               capture_output=True, text=True)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertIn("--sources のあとに", r.stderr)
+        self.assertNotEqual(r.returncode, 0)
+
+    @unittest.skipUnless(_has_playwright(), "playwright が要る")
+    def test_check_all_ignores_sources_in_cwd(self):
+        # 作業フォルダの sources.md（別のデッキの控えかもしれない）では照合しない
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as cwd:
+            deck = Path(d) / "deck.html"
+            deck.write_text(GOOD, encoding="utf8")
+            (Path(cwd) / "sources.md").write_text("# 出典\n- 別のデッキの数字 99件\n", encoding="utf8")
+            r = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_all.py"), str(deck)], capture_output=True, text=True, cwd=cwd)
+        self.assertIn("出典の照合なし", r.stdout)
+        self.assertNotIn("出典の控えに無い数字", r.stdout)
+
+    @unittest.skipUnless(_has_playwright(), "playwright が要る")
+    def test_good_deck_has_no_warn(self):
+        # 良い見本は check_all で FAIL も WARN も出ない
+        with tempfile.TemporaryDirectory() as d:
+            deck = Path(d) / "deck.html"
+            deck.write_text(GOOD, encoding="utf8")
+            r = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_all.py"), str(deck)], capture_output=True, text=True, cwd=d)
+        self.assertIn("0 FAIL / 0 WARN", r.stdout, r.stdout[-1500:])
+
+    @unittest.skipUnless(_has_playwright(), "playwright が要る")
+    def test_check_all_lists_pages_beyond_twenty(self):
+        # check_layout の表示上限（各20件）で21件目以降のページが一覧から消えない
+        pages = "".join(self.page('<div class="c"><div style="height:320px;border:1px solid #333">図</div></div>') for _ in range(24))
+        with tempfile.TemporaryDirectory() as d:
+            deck = Path(d) / "deck.html"
+            deck.write_text(GOOD.replace("</body>", pages + "</body>", 1), encoding="utf8")
+            r = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_all.py"), str(deck)], capture_output=True, text=True, cwd=d)
+        self.assertIn("== p30", r.stdout)
+        self.assertRegex(r.stdout, r"== p30\n(  (FAIL|WARN) .*\n)*  FAIL  版面の")
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class LayoutReviewFixes20261022(LayoutFeedback20261012):
+    """check_layout：zoom の試算（本文の大きさの揃い・目標30%・拡大前からのはみ出し）・2行にまたがるセルと罫線"""
+
+    test_right_side_gap_warns = test_two_highlighted_rows_warn = test_std_page_skips_layout_checks = None
+    test_unequal_contrast_columns_warn = test_equal_contrast_columns_pass = None
+
+    def hint(self, body):
+        return next((l for l in self.layout(body) if "版面の" in l), "")
+
+    def test_zoom_hint_keeps_body_size_in_range(self):
+        # デッキの中央値より少し大きい本文のページで、勧めた倍率に従うと本文の大きさの WARN が出ない
+        ul = ('<ul style="font-size:19px;margin:0"><li>申請の内容を確認して承認者に回す</li>'
+              '<li>添付漏れを提出前に警告して直させる</li><li>少額の申請は条件を満たせば自動で承認する</li></ul>')
+        line = self.hint(f'<div class="c">{ul}</div>')
+        m = re.search(r"zoom:([\d.]+)|上限の([\d.]+)倍", line)
+        self.assertTrue(m, line)
+        z = m.group(1) or m.group(2)
+        out = self.layout(f'<div class="c" style="zoom:{z}">{ul}</div>')
+        self.assertFalse(any("本文の実際の大きさ" in l for l in out), (z, out))
+
+    def test_zoom_hint_targets_warn_threshold(self):
+        # 「直る」と案内するのは空きが WARN の閾値（30%）を切るときだけ
+        line = self.hint('<div class="c"><div style="height:320px;background:#eee"></div></div>')
+        self.assertTrue(line)
+        self.assertFalse(re.search(r"を付けると空き約(3[1-9]|[4-9]\d)%", line), line)
+
+    def test_zoom_hint_ignores_overflow_before_zoom(self):
+        # 拡大前からフッターに入り込んでいる文字（別の FAIL で出る）で「1.05倍で即はみ出す」と案内しない
+        body = ('<div class="c"><div style="height:200px;background:#eee"></div></div>'
+                '<div style="position:absolute;left:120mm;bottom:6mm;font-size:6pt;line-height:1">注記の文字</div>')
+        line = self.hint(body)
+        self.assertTrue(line)
+        self.assertNotIn("1.05倍にするだけで版面からはみ出す", line)
+
+    ROWSPAN = ('<style>.rs tr+tr{{border-top:1px solid #333}}</style><div class="c"><table class="rs" style="font-size:13pt">'
+               '<tr><td {a} style="width:60mm">全部門に共通する条件</td><td>営業部の申請を確認する</td><td>月に約120件</td></tr>'
+               '<tr>{b}<td>本社の申請を確認する</td><td>月に約300件</td></tr>'
+               '<tr><td>拠点ごとの条件</td><td>全拠点の申請を確認する</td><td>月に約500件</td></tr></table></div>')
+
+    def test_rowspan_cell_is_not_crossed_by_row_rule(self):
+        out = self.layout(self.ROWSPAN.format(a='rowspan="2"', b=""))
+        self.assertFalse(any("罫線に重なっている" in l for l in out), out)
+
+    def test_text_over_row_rule_still_warns(self):
+        # またがるセルでない文字が罫線に重なるときは、これまでどおり WARN
+        body = ('<div style="height:40px;border-bottom:2px solid #333">指標名、単位</div>'
+                '<div style="margin-top:-18px;font-size:20px;font-weight:700">48.5</div><div style="height:300px;border:1px solid #333">図</div>')
+        self.assertTrue(any("罫線に重なっている" in l for l in self.layout(body)))
+
+
 class AxisNameInHeaderBand(unittest.TestCase):
     # §4.102: 見出し行の左端セルを空欄にしない
     def test_empty_header_corner_fires(self):
