@@ -2,7 +2,7 @@
 """check_all.py — check_deck.py と check_layout.mjs を1回で回し、指摘をページごとにまとめて表示する。
 
 使い方:
-  python3 scripts/check_all.py mydeck.html                    # 同じフォルダか作業フォルダに sources.md があれば照合も行う
+  python3 scripts/check_all.py mydeck.html                    # デッキと同じフォルダに sources.md があれば照合も行う
   python3 scripts/check_all.py mydeck.html --sources sources.md
 
 出力は「全体の指摘」→「ページごとの指摘（FAIL を先に）」→ タイトル一覧。指摘の § は rules.py --sec で引ける。
@@ -43,15 +43,18 @@ def main():
     deck = args[0]
     sources = None
     if "--sources" in args:
-        sources = args[args.index("--sources") + 1]
+        k = args.index("--sources")
+        if k + 1 >= len(args) or args[k + 1].startswith("--"):
+            sys.exit("--sources のあとに出典の控えのファイル名を書く（例: --sources sources.md）")
+        sources = args[k + 1]
     else:
-        for cand in (Path(deck).resolve().parent / "sources.md", Path.cwd() / "sources.md"):
-            if cand.exists():
-                sources = str(cand)
-                break
+        # デッキと同じフォルダの控えだけを使う（作業フォルダの sources.md は別のデッキの控えのことがある）
+        cand = Path(deck).resolve().parent / "sources.md"
+        if cand.exists():
+            sources = str(cand)
     cd_cmd = [sys.executable, str(HERE / "check_deck.py"), deck] + (["--sources", sources] if sources else [])
     cd = run(cd_cmd)
-    cl = run(["node", str(HERE / "check_layout.mjs"), deck])
+    cl = run(["node", str(HERE / "check_layout.mjs"), deck, "--all"])  # 表示の上限を外し、21件目以降のページも一覧に出す
     broken = [(name, p) for name, p in (("check_deck.py", cd), ("check_layout.mjs", cl)) if not finished(name, p)]
     for name, p in broken:
         print(f"{name} が最後まで動いていない（終了コード {p.returncode}）。この結果は使えない:", file=sys.stderr)
@@ -80,7 +83,7 @@ def main():
             print(f"  {k}  {m}")
     if titles:
         print("\n== タイトル一覧" + titles)
-    print(f"\n{nf} FAIL / {nw} WARN" + ("（出典の照合: " + sources + "）" if sources else "（出典の照合なし: sources.md が見つからない）"))
+    print(f"\n{nf} FAIL / {nw} WARN" + ("（出典の照合: " + sources + "）" if sources else "（出典の照合なし: デッキと同じフォルダに sources.md が無い。別の場所なら --sources で指定）"))
     sys.exit(1 if nf else 0)
 
 

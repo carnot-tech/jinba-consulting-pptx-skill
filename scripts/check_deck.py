@@ -393,19 +393,22 @@ def check_forbidden(pages, raw=""):
 CLOSING_TITLE = re.compile(r"^(ご清聴)?ありがとうございました[。！!]?$|^Thank you", re.I)
 
 
-def check_title(idx, title, explicit_break=False, closing=False):
+def check_title(idx, title, explicit_break=False, closing=False, edge=False):
     # explicit_break: 意味の切れ目で明示改行済み（§2.13）なら2行想定の WARN は出さない
     # closing: 表紙・裏表紙・締めのあいさつだけのページ。語尾の検査から外す
+    # edge: class に cover/chap/back が付いたページ。タイトルが無くてよい
     t = title.strip()
     if not t:
-        warn(f"p{idx}: タイトルが空（表紙/扉なら可）")
+        if not edge:
+            warn(f"p{idx}: タイトルが空（表紙/扉なら可）")
         return
     if re.search(r"(\d+|[一二三四五六七八九十]+)(つ|点|観点|方向|段階|要素|領域|論点|問い)(に|で|へ)?(を)?(整理|分解|分け|まとめ|分類|束ね)(する|る|た)?$|順に見る$", t):
         warn(f"p{idx}: タイトルが作業の説明になっている（「〜に分ける」「〜で整理する」は作り手の手順。分けた結果、何が言えるかを書く — §2.12・§2.19）: 「{t}」")
     elif re.search(r"を(一覧に|一覧化)(する|した)$", t):
         fail(f"p{idx}: タイトルが作業の説明で終わっている（「〜を一覧にする」は作り手の手順。並べた結果、何が言えるかを主張で書く — §2.12・§2.19）: 「{t}」")
-    elif re.search(r"(ごとに|別に|・).*を(整理(する|した)|まとめる|まとめた)$", t):
-        # 「打ち手ごとに担当・時期・効果を整理する」: 項目を並べて整理する＝資料の作業の説明
+    elif re.search(r"(ごとに|別に)、?([^、・をの]+・)+[^、・をの]+を(整理(する|した)|まとめる|まとめた)$", t):
+        # 「打ち手ごとに担当・時期・効果を整理する」: 切り口（〜ごとに）と項目の並び（A・B・C）を「整理する」＝資料の作業の説明
+        # 中黒だけ・「ごとに」だけでは FAIL にしない（「申請・承認の重複した窓口をまとめる」は打ち手の言い切り）
         fail(f"p{idx}: タイトルが作業の説明で終わっている（「〜ごとに…を整理する」は作り手の手順。整理した結果、何が言えるかを主張で書く — §2.12・§2.19）: 「{t}」")
     elif re.search(r"を整理(する|した)$|を(まとめる|まとめた)$", t):
         # 「承認フローを整理する」「重複した窓口をまとめる」のように打ち手の言い切りでもあり得るので WARN（上の「3つに整理する」と揃える）
@@ -741,7 +744,9 @@ JA = r"[\u3040-\u30ff\u4e00-\u9fff]"
 HALF_COMMA = re.compile(JA + r",\s?" + JA)
 
 
-DASH_LINK = re.compile(r"\S ?[—―─━]{1,2} ?\S")  # 全角ダッシュ・水平線・罫線の文字でのつなぎ（空白は _leaf_texts で1つに正規化済み）
+# 全角ダッシュ・水平線でのつなぎ。罫線の文字（─━）は前後に空白があるときだけ（「├─ 項目」のような階層表記は対象外）
+# 空白は _leaf_texts で1つに正規化済み
+DASH_LINK = re.compile(r"\S ?[—―]{1,2} ?\S|\S [─━]{1,2} \S")
 
 
 def check_dash_link(idx, leaves):
@@ -919,8 +924,11 @@ def check_html(path):
     for cls in ["figttl", "subtitle"]:
         if re.search(r'class="[^"]*\b' + cls + r'\b', html):
             fail(f"サブタイトル/図表ラベル系クラス `.{cls}` が残っている")
+    # 表紙・章扉・裏表紙（class に cover/chap/back）のサブタイトルは数えない
+    frags, fcls = _slides(html)
+    inner = "".join(f for f, c in zip(frags, fcls) if not {"cover", "chap", "back"} & set(c.split())) if frags else html
     for cls in ["sub", "lead", "caption"]:
-        n = len(re.findall(r'class="[^"]*\b' + cls + r'\b', html))
+        n = len(re.findall(r'class="[^"]*\b' + cls + r'\b', inner))
         if n:
             warn(f"`.{cls}` ×{n} — 表紙サブタイトルなら可。コンテンツスライドのタイトル直下なら禁止（目視確認）")
     if re.search(r'<span class="ac">', html):
@@ -999,7 +1007,7 @@ def check_html(path):
         lines = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", x)).strip() for x in re.split(r"<br\s*/?>", raw_t)]
         explicit_break = len(lines) > 1 and all(_fwlen(x) <= TITLE_MAX for x in lines)
         closing = edge or (i == len(slides) and bool(CLOSING_TITLE.search(t)))
-        check_title(i, t, explicit_break, closing)
+        check_title(i, t, explicit_break, closing, edge)
         check_count_match(i, t, re.sub(r"<[^>]+>", " ", s))
         leaves = _leaf_texts(s)
         check_body_placeholders(i, leaves, t)
@@ -1085,7 +1093,10 @@ def check_sources(html_path, sources_path):
     src = _src_numbers(sp.read_text(encoding="utf8", errors="ignore"))
     html = Path(html_path).read_text(encoding="utf8", errors="ignore")
     missing = []
-    for i, frag in enumerate(_slides(html)[0], 1):
+    frags, classes = _slides(html)
+    for i, frag in enumerate(frags, 1):
+        if "std" in (classes[i - 1] if i - 1 < len(classes) else "").split():
+            continue  # 正本から差し込んだ定型ページ（§4.99・会社概要など）は照合しない。ほかの文章検査と揃える
         vis = _visible(frag)
         for m in NUM_FACT.finditer(vis):
             n = _norm_num(m.group(1))

@@ -30,7 +30,7 @@
 //  27. 並べた項目（箇条書き・同じ種類の縦の並び）の間が、余白・gap の決まりより文字の1.5倍超（WARN）・3倍超（FAIL）余分に空いている間延び（§4.12）
 //   4 の補足: 版面の30%超が空いているときは WARN（40%超は FAIL）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
-// 使い方: node scripts/check_layout.mjs deck.html   （playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
+// 使い方: node scripts/check_layout.mjs deck.html [--all]   （--all で指摘を全件表示。既定は FAIL・WARN 各20件まで。playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -47,8 +47,8 @@ async function loadPlaywright() {
   return await import("playwright");
 }
 
-const file = process.argv[2];
-if (!file) { console.error("usage: node check_layout.mjs deck.html"); process.exit(2); }
+const file = process.argv.slice(2).find((a) => !a.startsWith("--"));
+if (!file) { console.error("usage: node check_layout.mjs deck.html [--all]"); process.exit(2); }
 
 const pw = await loadPlaywright();
 const browser = await pw.chromium.launch();
@@ -87,6 +87,16 @@ const { issues, warns } = await page.evaluate(() => {
   const isFilled = (st) => { const bg = st.backgroundColor; return bg && bg !== "transparent" && !/rgba\([^)]*,\s*0\)$/.test(bg); };
   const isBoxed = (st) => isFilled(st) || ["Top", "Right", "Bottom", "Left"].every((k) => parseFloat(st[`border${k}Width`]) > 0 && st[`border${k}Style`] !== "none");
   const slides = [...document.querySelectorAll("section.s, section.slide, .slide")];
+  // ページの本文の実際の大きさ（中央値）。6 の揃いの検査と、4 の zoom の試算の上限で同じ測り方を使う
+  const bodySize = (s) => {
+    const body = [...s.querySelectorAll("li, td, p")].filter((el) => (el.textContent || "").trim().length > 8 && !el.closest(".src, .foot, .footer"));
+    const bs = body.map(effSize).filter((v) => v > 0).sort((a, b) => a - b);
+    return bs.length ? bs[Math.floor(bs.length / 2)] : 0;
+  };
+  const deckBody = (() => {
+    const v = slides.filter((s) => !s.matches(".std, .cover, .chap, .back")).map(bodySize).filter((x) => x > 0).sort((a, b) => a - b);
+    return v.length ? v[Math.floor(v.length / 2)] : 0;
+  })();
   slides.forEach((s, i) => {
     const n = i + 1;
     const sr = s.getBoundingClientRect();
@@ -142,7 +152,6 @@ const { issues, warns } = await page.evaluate(() => {
       const area = bottom - top;
       const span = spanNow().span;
       const empty = area > 0 ? 1 - span / area : 0;
-      // 本文の器を何倍にすれば空きが収まるか（§4.12 の「一段大きく」＝本文の大きさの揃い ±15% の範囲）を試算して添える
       // 器を拡大したときのはみ出し: 文字の下端だけでなく、器の中の全要素（表・図形・画像を含む）の外接矩形の右端・下端を見る
       const overflowOf = (box) => {
         const sr = s.getBoundingClientRect();
@@ -154,31 +163,38 @@ const { issues, warns } = await page.evaluate(() => {
         }
         return over;
       };
-      // 本文の器を何倍にすれば空きが limit を切るか（§4.12 の「一段大きく」＝本文の大きさの揃い ±15% の範囲）を試算して添える
-      const fitHint = (limit) => {
+      // 本文の器を何倍にすれば空きが WARN の閾値（30%）を切るかを試算して添える。FAIL（40%超）のページも 30% を目標にする
+      // 上限は 1.15 倍。ただし本文の大きさが、デッキの中央値の ±15%（6 の揃いの検査）を超えない倍率までにする
+      const fitHint = () => {
+        const limit = 0.3;
         const box = s.querySelector(":scope .c, :scope .sinner > .content");
         if (!box || area <= 0) return "";
         const orig = box.style.zoom;
-        let best = null;
-        const base = Math.max(1, overflowOf(box) + 1); // 拡大前からはみ出している分（別の FAIL で出る）は差し引く
+        let best = null, sizeCap = false;
+        // 拡大前からはみ出している分（別の FAIL で出る）は、器の中もページの文字も差し引いて比べる
+        const base = Math.max(1, overflowOf(box) + 1);
+        const baseOver = Math.max(1, spanNow().over + 1);
         for (const z of [1.05, 1.1, 1.15]) {
           box.style.zoom = String(z);
           const m = spanNow();
-          if (m.over > 1 || overflowOf(box) > base) break;
+          if (m.over > baseOver || overflowOf(box) > base) break;
+          if (deckBody && bodySize(s) / deckBody > 1.15) { sizeCap = true; break; }
           best = { z, empty: 1 - m.span / area };
-          if (best.empty <= 0.28) break;
+          if (best.empty <= limit - 0.02) break;
         }
         box.style.zoom = orig;
         const name = box.classList.contains("c") ? ".c" : ".content";
         const pct = Math.round(limit * 100);
+        if (!best && sizeCap) return ` 試算: 本文の器（${name}）を1.05倍にするだけで本文が他のページより15%超大きくなる。拡大では直らないので、配置を変えるか前後のページとまとめる。`;
         if (!best) return ` 試算: 本文の器（${name}）を1.05倍にするだけで版面からはみ出す。拡大では直らないので、配置を変えるか前後のページとまとめる。`;
         if (best.empty <= limit) return ` 試算: このページの本文の器（${name}）に zoom:${best.z} を付けると空き約${Math.round(best.empty * 100)}%（はみ出しなし）。`;
-        return ` 試算: 本文の器（${name}）をはみ出さない上限の${best.z}倍にしても空き約${Math.round(best.empty * 100)}%で${pct}%を切らない。前後のページとまとめるか、形を変える（文字をさらに大きくすると、他のページと本文の大きさが揃わなくなる）。`;
+        const why = sizeCap ? "本文の大きさを他のページと揃えられる" : "はみ出さない";
+        return ` 試算: 本文の器（${name}）を${why}上限の${best.z}倍にしても空き約${Math.round(best.empty * 100)}%で${pct}%を切らない。前後のページとまとめるか、形を変える（文字をさらに大きくすると、他のページと本文の大きさが揃わなくなる）。`;
       };
       if (empty > 0.4) {
-        out.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（40%超。直し方は、文字を一段大きくする・配置を変える（右に意味合いの列を置く等）・前後のページと統合する。空きを埋めるために数字・事例・行を足さない。項目の間や列の高さを広げて埋めない — §4.12・§5.13）${fitHint(0.4)}`);
+        out.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（40%超。直し方は、文字を一段大きくする・配置を変える（右に意味合いの列を置く等）・前後のページと統合する。空きを埋めるために数字・事例・行を足さない。項目の間や列の高さを広げて埋めない — §4.12・§5.13）${fitHint()}`);
       } else if (empty > 0.3) {
-        warnOut.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（30%超。「下が空きすぎ」と差し戻されやすい。文字を一段大きくする・配置を変える。空きを埋めるために中身を足さない — §5.13）${fitHint(0.3)}`);
+        warnOut.push(`p${n}: 版面の ${Math.round(empty * 100)}% が空いている（30%超。「下が空きすぎ」と差し戻されやすい。文字を一段大きくする・配置を変える。空きを埋めるために中身を足さない — §5.13）${fitHint()}`);
       }
     }
     // 13. 表の行の縦の引き伸ばし（§4.12）: 行の高さのうち、一番高いセルの中身と上下の余白を超える分を1行の高さで割る
@@ -603,8 +619,11 @@ const { issues, warns } = await page.evaluate(() => {
         let hit = 0;
         for (const el of els) {
           if (hit || el.closest(".foot, .footer, footer, svg")) continue;
+          // 2行以上にまたがるセルの文字は、同じ表の行の区切り罫が横切って見えるのが正しい形なので比べない
+          const span = el.closest("td, th");
+          const spanTable = span && span.rowSpan > 1 ? span.closest("table") : null;
           for (const t of ownTextRects(el)) {
-            const ln = rules.find((q) => !q.el.contains(el) && !el.contains(q.el) && q.y > t.top + 3 && q.y < t.bottom - 3 && Math.min(q.r, t.right) - Math.max(q.l, t.left) > 4);
+            const ln = rules.find((q) => !q.el.contains(el) && !el.contains(q.el) && !(spanTable && q.el.closest("table") === spanTable) && q.y > t.top + 3 && q.y < t.bottom - 3 && Math.min(q.r, t.right) - Math.max(q.l, t.left) > 4);
             if (ln) {
               hit = 1;
               warnOut.push(`p${n}: 文字「${(el.textContent || "").trim().slice(0, 14)}」が罫線に重なっている（数字・ラベルを線から離す。棒グラフなら最も高い棒の上に数字の場所を取る）`);
@@ -831,9 +850,7 @@ const { issues, warns } = await page.evaluate(() => {
     // 6. タイトルと本文の実際の大きさ（表紙・章扉・裏表紙は対象外）
     if (!std && !s.matches(".cover, .chap, .back")) {
       const ttl = s.querySelector("h1, .title, .ttl");
-      const body = [...s.querySelectorAll("li, td, p")].filter((el) => (el.textContent || "").trim().length > 8 && !el.closest(".src, .foot, .footer"));
-      const bs = body.map(effSize).filter((v) => v > 0).sort((a, b) => a - b);
-      sizes.push({ n, title: ttl ? effSize(ttl) : 0, sw: sr.width, body: bs.length ? bs[Math.floor(bs.length / 2)] : 0 });
+      sizes.push({ n, title: ttl ? effSize(ttl) : 0, sw: sr.width, body: bodySize(s) });
     }
     // 17. 文字が、それを囲む箱（塗り・四辺の枠・表のセル）の外にはみ出している
     if (!std) {
@@ -898,9 +915,13 @@ try {
     issues.unshift(`PDF が ${nPages} ページになる（スライドは ${nSlides} 枚）。用紙より高いスライドがあり、PDF で途中から次のページに割れている（はみ出した要素を版面に収める）`);
 } catch (e) { console.error("PDF ページ数の照合を飛ばした: " + e.message); }
 await browser.close();
-for (const m of warns.slice(0, 20)) console.log("WARN  " + m);
+// 既定では各20件まで表示する。--all（check_all.py が付ける）なら全件を出す
+const cap = process.argv.includes("--all") ? Infinity : 20;
+for (const m of warns.slice(0, cap)) console.log("WARN  " + m);
+if (warns.length > cap) console.log(`（WARN はほか ${warns.length - cap} 件。全件は --all）`);
 if (issues.length) {
-  for (const m of issues.slice(0, 20)) console.log("FAIL  " + m);
+  for (const m of issues.slice(0, cap)) console.log("FAIL  " + m);
+  if (issues.length > cap) console.log(`（FAIL はほか ${issues.length - cap} 件。全件は --all）`);
   console.log(`\n${issues.length} layout FAIL`);
   process.exit(1);
 }
