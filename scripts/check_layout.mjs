@@ -464,11 +464,23 @@ const { issues, warns } = await page.evaluate(() => {
       }
       // 19・20. 塗りの意味：表のセルの塗りに同じ色の凡例チップがない（WARN。§5.2・§4.57）／表の見出しの塗り（WARN。§6）
       {
+        // rgb() 以外（oklch()・color() など）は 1px のキャンバスに塗って RGB を読む
+        const cv = document.createElement("canvas");
+        cv.width = cv.height = 1;
+        const cx = cv.getContext("2d", { willReadFrequently: true });
         const rgb = (bg) => {
-          const m = (bg || "").match(/rgba?\(([^)]+)\)/);
-          if (!m) return null;
-          const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number);
-          return v.length > 3 && v[3] < 0.1 ? null : v.slice(0, 3);
+          if (!bg || bg === "transparent") return null;
+          const m = bg.match(/^rgba?\(([^)]+)\)$/);
+          if (m) {
+            const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number);
+            return v.length > 3 && v[3] < 0.1 ? null : v.slice(0, 3);
+          }
+          cx.clearRect(0, 0, 1, 1);
+          cx.fillStyle = "rgba(0,0,0,0)";
+          cx.fillStyle = bg;
+          cx.fillRect(0, 0, 1, 1);
+          const d = cx.getImageData(0, 0, 1, 1).data;
+          return d[3] < 26 ? null : [d[0], d[1], d[2]];
         };
         const near = (a, b, t = 14) => !!(a && b) && a.every((v, k) => Math.abs(v - b[k]) <= t);
         const hex = (c) => "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");

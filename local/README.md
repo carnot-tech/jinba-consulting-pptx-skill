@@ -6,7 +6,7 @@
 |---|---|---|
 | `slide-rules.local.md` | 自組織の規約（本体 `references/slide-rules.md` への追加・上書き） | スキルは本体の規約を読んだ後にこれを読む。両方に当たる規則はこちらが優先 |
 | `forbid.txt` | 外に出してはいけない語（顧客名・案件コードなど。1 行 1 語、`re:` で正規表現） | `python3 scripts/check_deck.py deck.html --forbid local/forbid.txt` |
-| `old-colors.txt` | 自組織で使わなくなったレガシー色（1 行 1 色、HEX） | `check_deck.py` が指定なしで読み、見つけたら FAIL。他社の書式で組むときは `--brand none` で外す |
+| `old-colors.txt` | 自組織で使わなくなったレガシー色（1 行 1 色、行頭に HEX 6 桁。後ろに説明を書いてよい。読めない行は WARN） | `check_deck.py` が指定なしで読み、見つけたら FAIL。他社の書式で組むときは `--brand none` で外す |
 | `templates/` | 自組織のパーツ集・スキン・差し込み先の資料（`.pptx` / `.potx`）と `skin.json` | 本体の `templates/` の代わりに、または加えて使う |
 | `examples/` | 自組織で作った参考デッキ | 似た資料を作るときの手本 |
 

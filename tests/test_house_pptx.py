@@ -57,7 +57,7 @@ def make_house(path):
 
 
 def check(path, *extra):
-    r = subprocess.run([sys.executable, str(CHECK), str(path), *extra], capture_output=True, text=True)
+    r = subprocess.run([sys.executable, str(CHECK), str(path), "--brand", "none", *extra], capture_output=True, text=True)
     return r.returncode, [l for l in r.stdout.splitlines() if l.startswith("FAIL")]
 
 
@@ -187,7 +187,7 @@ class HouseDeck(unittest.TestCase):
             r.text, r.font.size = piece, Pt(14)
         out = self.d / "dash_runs.pptx"
         prs.save(str(out))
-        r = subprocess.run([sys.executable, str(CHECK), str(out)], capture_output=True, text=True)
+        r = subprocess.run([sys.executable, str(CHECK), str(out), "--brand", "none"], capture_output=True, text=True)
         self.assertIn("ダッシュ", r.stdout)
 
     def test_potx_template_is_measured_and_built_on(self):
@@ -225,7 +225,7 @@ class HouseDeck(unittest.TestCase):
             measure(sample, layout="無いレイアウト")
 
     def test_line_break_in_shape_is_not_an_orphan(self):
-        r = subprocess.run([sys.executable, str(CHECK), str(self.pages)], capture_output=True, text=True)
+        r = subprocess.run([sys.executable, str(CHECK), str(self.pages), "--brand", "none"], capture_output=True, text=True)
         self.assertNotIn("泣き別れ", r.stdout)   # 矢羽の中の段落内改行を 1 行と数えない
 
 
