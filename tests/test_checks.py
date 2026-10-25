@@ -622,6 +622,16 @@ class BotFeedback20261019(unittest.TestCase):
         self.assertFalse(any("右上のラベル" in l for l in r.stdout.splitlines()), r.stdout[-600:])
         self.assertFalse(any("右上のラベル" in l for l in warns(GOOD)))
 
+    def test_new_deck_fits_narrow_window(self):
+        # 画面幅がスライド幅より狭いと左右が切れていた。生成物に等比縮小の script と、印刷時に縮小を外す指定があること
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "fit.html"
+            subprocess.run([sys.executable, str(ROOT / "scripts" / "new_deck.py"),
+                            "--parts", "b01,b02,m05,b10", "-o", str(out)], capture_output=True, check=True)
+            html = out.read_text(encoding="utf8")
+        self.assertIn('wrap.className = "fitwrap"', html)
+        self.assertRegex(html, r"@media print\{\s*\.fitwrap\{width:auto!important")  # .s の内側にスコープされていない
+
     def test_missing_header_label_warns(self):
         html = inject('<div class="date">打ち手</div>', '<div class="date"></div>')
         self.assertTrue(any("右上のラベル" in l for l in warns(html)), warns(html))
@@ -668,6 +678,53 @@ class LayoutBotFeedback20261019(LayoutFeedback20261012):
         body = ('<div style="position:relative;height:340px;border:1px solid #333"><p style="position:absolute;top:10px;left:10px">申請の<b>内容</b>を確認する</p>'
                 '<p style="position:absolute;top:12px;left:14px">承認者に回して結果を返す</p></div>')
         self.assertTrue(any("文字が重なっている" in l for l in self.layout(body)))
+
+
+def _has_chrome():
+    import os
+    import shutil
+    paths = [os.environ.get("CHROME_PATH") or "", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+             "C:/Program Files/Google/Chrome/Application/chrome.exe", "/usr/bin/google-chrome", "/usr/bin/chromium"]
+    return bool(shutil.which("node")) and any(p and Path(p).exists() for p in paths)
+
+
+@unittest.skipUnless(_has_pptx() and _has_chrome(), "python-pptx・Node・Chrome が要る")
+class PptxCssZoom(unittest.TestCase):
+    """html_to_pptx：CSS の zoom で縮めたスライド（追加パーツ集の .slide）の文字・行間・罫線を、縮小後の大きさで書き出す"""
+
+    HTML = ('<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>'
+            '@page{size:338.67mm 190.5mm;margin:0}body{margin:0}'
+            '.s{width:338.67mm;height:190.5mm;position:relative;page-break-after:always;background:#fff}'
+            '.slide{width:1600px;height:900px;zoom:0.8;position:relative;page-break-after:always;background:#fff}'
+            'h1{position:absolute;left:40px;top:40px;margin:0;font-size:40px;line-height:50px;border-bottom:5px solid #000}'
+            '</style></head><body>'
+            '<section class="s"><h1>承認の手順を見直す</h1></section>'
+            '<section class="slide"><h1>承認の手順を見直す</h1></section>'
+            '</body></html>')
+
+    def convert(self):
+        from pptx import Presentation
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "deck.html"
+            p.write_text(self.HTML, encoding="utf8")
+            out = Path(d) / "deck.pptx"
+            subprocess.run([sys.executable, str(ROOT / "scripts" / "html_to_pptx.py"), str(p), str(out)],
+                           capture_output=True, text=True, check=True)
+            got = []
+            for sl in Presentation(str(out)).slides:
+                text = next(sh for sh in sl.shapes if sh.has_text_frame and sh.text_frame.text)
+                line = next(sh for sh in sl.shapes if not (sh.has_text_frame and sh.text_frame.text))
+                para = text.text_frame.paragraphs[0]
+                got.append((para.runs[0].font.size.pt, para.line_spacing.pt, line.line.width.pt))
+            return got
+
+    def test_zoomed_slide_uses_rendered_sizes(self):
+        plain, zoomed = self.convert()
+        # 1px = 0.75pt。縮小のないスライドは 40px→30pt、zoom:0.8 のスライドは 32px→24pt
+        self.assertAlmostEqual(plain[0], 30.0, delta=0.5)
+        self.assertAlmostEqual(zoomed[0], 24.0, delta=0.5)
+        self.assertAlmostEqual(zoomed[1], 30.0, delta=0.5)   # 行間 50px×0.8
+        self.assertAlmostEqual(zoomed[2], 3.0, delta=0.1)    # 罫線 5px×0.8
 
 
 @unittest.skipUnless(_has_pptx() and _has_playwright(), "python-pptx と playwright が要る")
