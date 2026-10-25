@@ -4,9 +4,9 @@ new_deck.py — 2つのパーツ集から必要なパーツだけを取り出し
 
   python3 scripts/new_deck.py --parts b01,b02,m05,b06,m10,b09,b10 --title "資料名" -o mydeck.html
 
-  b01〜b27 = templates/freeform_parts_16x9.html（基本パーツ集）のパーツ番号
+  b01〜b30 = templates/freeform_parts_16x9.html（基本パーツ集）のパーツ番号
   m01〜m35 = templates/freeform_parts_more_16x9.html（追加パーツ集）のパーツ番号
-  番号は references/archetype-catalog.md と assets/SlideCatalog_16x9.pdf のページ順（基本 P.1〜27、追加 P.28〜62 → m01〜m35）
+  番号は references/archetype-catalog.md と assets/SlideCatalog_16x9.pdf のページ順（基本 P.1〜30、追加 P.31〜65 → m01〜m35）
 
 出力は単体HTML。2つのパーツ集はCSSの設計が違う（基本＝.s / 追加＝.slide）ので、
 基本パーツ集の要素セレクタ（h1・table・th・td など）は .s 配下に、追加パーツ集の * / body は .slide 配下に
@@ -280,10 +280,47 @@ def main():
     padding:var(--margin-y) var(--margin-x);box-sizing:border-box;
     transform:scale(0.8);transform-origin:top left}}
 }}
+/* ===== 画面幅がスライド幅（338.67mm）より狭いときは等比で縮める（下の script が .fitwrap で包む） =====
+   印刷・PDF・check_layout（いずれも印刷メディア）では縮小を外して原寸に戻す。
+   パーツ集側の .fitwrap 指定は結合時に .s の内側へスコープされて効かないので、ここで指定する */
+@media print{{
+  .fitwrap{{width:auto!important;height:auto!important;margin:0!important;overflow:visible!important}}
+  .fitwrap>.s, .fitwrap>.slide{{transform:none!important}}
+}}
 </style></head><body>
 <main class="deck skin-warm">
 {chr(10).join(body)}
 </main>
+<script>
+(function () {{
+  var printing = window.matchMedia ? window.matchMedia("print") : null;
+  function fit() {{
+    var avail = Math.max(1, document.documentElement.clientWidth - 24);
+    document.querySelectorAll(".deck > .s, .deck > .slide, .fitwrap > .s, .fitwrap > .slide").forEach(function (el) {{
+      if (!el.offsetWidth) return;  // 隠したスライド（社外版の .internal など）は包まない
+      var wrap = el.parentElement;
+      if (!wrap.classList.contains("fitwrap")) {{
+        var cs = getComputedStyle(el);
+        wrap = document.createElement("div");
+        wrap.className = "fitwrap";
+        wrap.style.overflow = "hidden";
+        wrap.style.margin = cs.marginTop + " auto " + cs.marginBottom;
+        el.parentNode.insertBefore(wrap, el);
+        wrap.appendChild(el);
+        el.style.margin = "0";
+      }}
+      el.style.transform = "";
+      var s = (printing && printing.matches) ? 1 : Math.min(1, avail / el.offsetWidth);
+      el.style.transformOrigin = "top left";
+      el.style.transform = s < 1 ? "scale(" + s + ")" : "";
+      wrap.style.width = el.offsetWidth * s + "px";
+      wrap.style.height = el.offsetHeight * s + "px";
+    }});
+  }}
+  window.addEventListener("resize", fit);
+  fit();
+}})();
+</script>
 </body></html>
 """
     # ファイル名は NFC に揃える（macOS は濁点を分けた形で保存することがあり、Windows で文字化けして見える — slide-rules §8）

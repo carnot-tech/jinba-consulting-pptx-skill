@@ -27,6 +27,9 @@ const collect = () => {
     const st = getComputedStyle(el);
     return st.display !== "none" && st.visibility !== "hidden" && parseFloat(st.opacity || "1") > 0.02;
   };
+  // CSS の zoom（追加パーツ集の .slide は 0.8）。getBoundingClientRect は縮小後の大きさを返すが、
+  // getComputedStyle の長さ（文字の大きさ・行間・罫線・余白）は縮小前の値を返すので、要素の実効倍率を掛けて揃える
+  const zoomOf = (el) => (el && typeof el.currentCSSZoom === "number" ? el.currentCSSZoom : 1);
   const MEDIA = new Set(["svg", "canvas", "img", "video", "iframe", "picture"]);
   const INLINE = new Set(["inline", "inline-block", "inline-flex", "contents"]);
 
@@ -63,7 +66,7 @@ const collect = () => {
     const st = getComputedStyle(el);
     const c = rgba(st.color);
     return {
-      size: parseFloat(st.fontSize),
+      size: parseFloat(st.fontSize) * zoomOf(el),
       bold: parseInt(st.fontWeight, 10) >= 600,
       italic: st.fontStyle === "italic",
       underline: (st.textDecorationLine || "").includes("underline"),
@@ -88,17 +91,17 @@ const collect = () => {
     const m = (pb.content || "").match(/^"(.*)"$/);
     if (m && m[1].trim()) {
       const c = rgba(pb.color);
-      return { char: m[1].trim(), color: c ? c.hex : null, size: parseFloat(pb.fontSize) };
+      return { char: m[1].trim(), color: c ? c.hex : null, size: parseFloat(pb.fontSize) * zoomOf(li) };
     }
     if (getComputedStyle(li).display !== "list-item") return null;
     const lst = getComputedStyle(li).listStyleType;
     if (!lst || lst === "none") return null;
     if (lst === "decimal") return { auto: "arabicPeriod", start: [...li.parentElement.children].indexOf(li) + 1 };
-    return { char: "•", color: null, size: parseFloat(getComputedStyle(li).fontSize) };
+    return { char: "•", color: null, size: parseFloat(getComputedStyle(li).fontSize) * zoomOf(li) };
   };
   const hangOf = (el) => {
     const pb = getComputedStyle(el, "::before");
-    const left = parseFloat(pb.left);
+    const left = parseFloat(pb.left) * zoomOf(el);
     if (pb.position === "absolute" && left < 0) return -left;
     return 0;
   };
@@ -109,7 +112,7 @@ const collect = () => {
     const rootSt = getComputedStyle(root);
     const newPara = (el) => {
       const st = getComputedStyle(el);
-      cur = { align: st.textAlign, lineHeight: parseFloat(st.lineHeight) || parseFloat(st.fontSize) * 1.5, runs: [] };
+      cur = { align: st.textAlign, lineHeight: (parseFloat(st.lineHeight) || parseFloat(st.fontSize) * 1.5) * zoomOf(el), runs: [] };
       paras.push(cur);
     };
     const walk = (node, block) => {
@@ -173,8 +176,8 @@ const collect = () => {
   const ownText = (el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
   const textDeep = (el) => (el.textContent || "").trim().length > 0;
 
-  const borders = (st) => ["Top", "Right", "Bottom", "Left"].map((s) => {
-    const w = parseFloat(st[`border${s}Width`]);
+  const borders = (st, z = 1) => ["Top", "Right", "Bottom", "Left"].map((s) => {
+    const w = parseFloat(st[`border${s}Width`]) * z;
     const style = st[`border${s}Style`];
     const c = rgba(st[`border${s}Color`]);
     return w > 0 && style !== "none" && style !== "hidden" && c && c.a > 0.05 ? { w, color: c.hex, dash: style === "dashed" || style === "dotted" ? style : null } : null;
@@ -232,8 +235,8 @@ const collect = () => {
             const fill = f && f.a > 0.05 ? f : (rowBg && rowBg.a > 0.05 ? rowBg : null);
             cells.push({
               r: ri, c: ci, rs, cs, rect: rel(cr), fill: fill ? fill.hex : null,
-              borders: borders(cst), valign: cst.verticalAlign, vert: [cell, ...cell.querySelectorAll("*")].some((d) => /^vertical/.test(getComputedStyle(d).writingMode)),
-              pad: ["Top", "Right", "Bottom", "Left"].map((k) => parseFloat(cst[`padding${k}`]) || 0),
+              borders: borders(cst, zoomOf(cell)), valign: cst.verticalAlign, vert: [cell, ...cell.querySelectorAll("*")].some((d) => /^vertical/.test(getComputedStyle(d).writingMode)),
+              pad: ["Top", "Right", "Bottom", "Left"].map((k) => (parseFloat(cst[`padding${k}`]) || 0) * zoomOf(cell)),
               paras: [...cell.querySelectorAll("*")].some(isGraphic) ? (graphicCells.push(cell), []) : paragraphsOf(cell),
             });
             ci += cs;
@@ -255,15 +258,15 @@ const collect = () => {
       // 塗り・枠・多角形（ルートのスライド自体の地色は背景として別扱い）
       if (!isRoot) {
         const f = rgba(st.backgroundColor);
-        const b = borders(st);
+        const b = borders(st, zoomOf(el));
         const poly = polygonOf(el, r);
         const rr = st.borderTopLeftRadius || "0";
         const ellipse = /%/.test(rr) && parseFloat(rr) >= 50; // 50% の角丸＝楕円（正方形なら円）
-        const radius = /%/.test(rr) ? (parseFloat(rr) / 100) * Math.min(r.width, r.height) : (parseFloat(rr) || 0);
+        const radius = /%/.test(rr) ? (parseFloat(rr) / 100) * Math.min(r.width, r.height) : (parseFloat(rr) || 0) * zoomOf(el);
         const hasFill = f && f.a > 0.05;
         // 幅・高さ0で枠線だけの要素＝CSSの三角形。色のある辺から多角形を作る
         if (el.clientWidth === 0 && el.clientHeight === 0 && b.filter(Boolean).length === 1) {
-          const [bt, br, bb, bl] = ["Top", "Right", "Bottom", "Left"].map((k) => parseFloat(st[`border${k}Width`]) || 0);
+          const [bt, br, bb, bl] = ["Top", "Right", "Bottom", "Left"].map((k) => (parseFloat(st[`border${k}Width`]) || 0) * zoomOf(el));
           const W = r.width, H = r.height, k = b.findIndex(Boolean);
           const tri = [[[0, 0], [W, 0], [bl, bt]], [[W, 0], [W, H], [bl, bt]], [[0, H], [W, H], [bl, bt]], [[0, 0], [0, H], [bl, bt]]][k];
           items.push({ t: "rect", ...rel(r), fill: b[k].color, alpha: 1, poly: tri, radius: 0, line: null });
@@ -292,7 +295,7 @@ const collect = () => {
         const tr = textBox([el]) || el.getBoundingClientRect();
         const lines = tr.lines || 1;
         const cs = getComputedStyle(el);
-        const padL = parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth), padR = parseFloat(cs.paddingRight) + parseFloat(cs.borderRightWidth);
+        const z = zoomOf(el), padL = (parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth)) * z, padR = (parseFloat(cs.paddingRight) + parseFloat(cs.borderRightWidth)) * z;
         const content = { left: r.left + padL, width: r.width - padL - padR };
         const paras = paragraphsOf(el);
         const hang = paras[0]?.hang || 0;
@@ -331,7 +334,7 @@ const collect = () => {
         if (inline) g.push(n); else { if (g.length) groups.push(g); g = []; }
       }
       if (g.length) groups.push(g);
-      const padL = parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth), padR = parseFloat(cs.paddingRight) + parseFloat(cs.borderRightWidth);
+      const z = zoomOf(el), padL = (parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth)) * z, padR = (parseFloat(cs.paddingRight) + parseFloat(cs.borderRightWidth)) * z;
       const er = el.getBoundingClientRect();
       groups.forEach((grp, gi) => {
         if (!grp.some((n) => (n.textContent || "").trim())) return;
@@ -339,7 +342,7 @@ const collect = () => {
         if (!tr) return;
         const lines = tr.lines;
         const mk = gi === 0 ? marker(el) : null;
-        const mkPara = () => ({ align: cs.textAlign, lineHeight: parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.5, runs: [], hang: 0 });
+        const mkPara = () => ({ align: cs.textAlign, lineHeight: (parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.5) * zoomOf(el), runs: [], hang: 0 });
         const paras = [mkPara()];
         if (mk) { paras[0].bullet = mk; paras[0].hang = hangOf(el); }
         const add = (node) => {
