@@ -1507,6 +1507,27 @@ class AppendixDivider(unittest.TestCase):
         fired, fails = self._fires(self.DIV + page)
         self.assertFalse(fired, fails)
 
+    def test_agenda_listing_appendix_is_not_an_appendix_page(self):
+        # アジェンダの項目・表のセルの「Appendix」「付録」はタグではない（後ろに正しい区切りがあれば通る）
+        agendas = (
+            '<section class="s"><h1>アジェンダ</h1><ol><li>現状の課題</li><li>打ち手</li><li>Appendix</li></ol></section>\n',
+            '<section class="s"><h1>営業部から順に承認の手順を差し替える</h1><table><tr><th>章</th><th>内容</th></tr>'
+            '<tr><td>付録</td><td>部門別の数字</td></tr></table><div class="foot"><b>業務自動化の検討</b><span>3</span></div></section>\n',
+        )
+        for agenda in agendas:
+            with self.subTest(agenda=agenda[:40]):
+                head, sep, tail = GOOD.partition('</section>')
+                deck = head + sep + "\n" + agenda + tail
+                head, sep, tail = deck.rpartition('<section class="s cover">')
+                code, fails = run(head + self.DIV + self.APPX + sep + tail)
+                self.assertFalse(any("§4.100" in f for f in fails), fails)
+
+    def test_divider_with_bracket_passes(self):
+        # 「参考資料（部門別）」のように括弧が続く区切りも区切りとして数える
+        div = '<section class="s"><h1>参考資料（部門別）</h1><p>部門別の数字</p></section>\n'
+        fired, fails = self._fires(div + self.APPX)
+        self.assertFalse(fired, fails)
+
 
 def run_raw(html, files, *extra):
     """run_files と同じだが、終了コード・標準出力・標準エラーをそのまま返す"""
@@ -1542,10 +1563,24 @@ class OldColors(unittest.TestCase):
                 self.assertTrue(any("8A8F94" in f for f in fails), fails)
 
     def test_unreadable_line_warns_and_short_value_does_not_match(self):
-        # 6桁でない値は読み飛ばして WARN。短い値で部分一致させない
-        r = run_raw(GOOD, {"old.colors": "8A8\n"}, "--old-colors", "@old.colors")
-        self.assertFalse(any("禁止色" in l for l in r.stdout.splitlines() if l.startswith("FAIL")), r.stdout[-400:])
-        self.assertTrue(any(l.startswith("WARN") and "読めない" in l for l in r.stdout.splitlines()), r.stdout[-400:])
+        # 6桁でない値は読み飛ばして WARN。短い値で部分一致させない。「#」付きの3桁もコメント扱いにしない
+        for body in ("8A8\n", "#8A8 旧色\n"):
+            with self.subTest(body=body):
+                r = run_raw(GOOD, {"old.colors": body}, "--old-colors", "@old.colors")
+                self.assertFalse(any("禁止色" in l for l in r.stdout.splitlines() if l.startswith("FAIL")), r.stdout[-400:])
+                self.assertTrue(any(l.startswith("WARN") and "読めない" in l for l in r.stdout.splitlines()), r.stdout[-400:])
+
+    def test_eight_digit_hex_matches(self):
+        # 透明度つきの8桁（デッキ側・一覧側とも）は先頭6桁の色として扱う
+        html = GOOD.replace("#8a8f94", "#8a8f94cc")
+        for body in ("8A8F94\n", "#8A8F94CC\n"):
+            with self.subTest(body=body):
+                code, fails = run_files(html, {"old.colors": body}, "--old-colors", "@old.colors")
+                self.assertTrue(any("8A8F94" in f for f in fails), fails)
+
+    def test_brand_none_with_old_colors_says_so(self):
+        r = run_raw(GOOD, {"old.colors": "8A8F94\n"}, "--old-colors", "@old.colors", "--brand", "none")
+        self.assertIn("--brand none", r.stderr)
 
     def test_color_inside_longer_hex_does_not_match(self):
         html = GOOD.replace("#8a8f94", "#8a8f9")  # 8A8F94 を消す
@@ -1581,9 +1616,11 @@ class PptxAppendixAndAxisNames(unittest.TestCase):
         from pptx.util import Inches, Pt
         prs = Presentation()
         prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
-        for title, body, table in pages:
+        for title, body, table, *tag in pages:
             s = prs.slides.add_slide(prs.slide_layouts[5])
             s.shapes.title.text = title
+            if tag:  # 上端の小さいタグチップ
+                s.shapes.add_textbox(Inches(0.5), Inches(0.15), Inches(1.2), Inches(0.4)).text_frame.text = tag[0]
             if body:
                 s.shapes.add_textbox(Inches(1), Inches(2), Inches(10), Inches(1)).text_frame.text = body
             if table:
@@ -1621,6 +1658,21 @@ class PptxAppendixAndAxisNames(unittest.TestCase):
                 fails = self._check(self._deck((ttl, "部門別の数字", None),
                                                ("付録：試行した営業部では承認待ちの平均が当日に縮んだ", None, (True, False, self.ROWS))))
                 self.assertFalse(any("§4.100" in f for f in fails), fails)
+
+    def test_agenda_item_is_not_a_tag(self):
+        # アジェンダや本文にある「Appendix」だけの図形はタグではない（後ろに区切りがあれば通る）
+        appx = ("付録：試行した営業部では承認待ちの平均が当日に縮んだ", None, (True, False, self.ROWS))
+        for page in (("アジェンダ", "Appendix", None), ("営業部から順に承認の手順を差し替える", "Appendix", None)):
+            with self.subTest(title=page[0]):
+                fails = self._check(self._deck(page, ("Appendix", "部門別の数字", None), appx))
+                self.assertFalse(any("§4.100" in f for f in fails), fails)
+
+    def test_tag_chip_at_top_fires(self):
+        page = ("試行した営業部では承認待ちの平均が当日に縮んだ", None, (True, False, self.ROWS), "付録")
+        fails = self._check(self._deck(page))
+        self.assertTrue(any("§4.100" in f for f in fails), fails)
+        fails = self._check(self._deck(("Appendix", "部門別の数字", None), page))
+        self.assertFalse(any("§4.100" in f for f in fails), fails)
 
     def test_short_appendix_page_fires(self):
         fails = self._check(self._deck(("付録：営業部では承認待ちが当日に縮んだ", "営業部は平均3日から当日に縮んだ", None)))

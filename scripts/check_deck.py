@@ -694,7 +694,8 @@ def check_pptx(path):
         kinds = [_shape_type(sh) for sh in s.shapes]
         rich = (any(getattr(sh, "has_table", False) or getattr(sh, "has_chart", False) for sh in s.shapes)
                 or 6 in kinds or kinds.count(13) >= 2)
-        APPX_PAGES[i] = (any(APPX_TAG_RE.match(x) for x in others), sum(_fwlen(x) for x in others), rich)
+        APPX_PAGES[i] = (appendix_tag_pptx(s, title_shape, title, prs.slide_width, prs.slide_height),
+                         sum(_fwlen(x) for x in others), rich)
         # サブタイトル疑い: タイトル直下 (y 1.2〜1.75in) の細字テキスト1行
         for sh in s.shapes:
             if sh.has_text_frame and sh.top is not None and Emu(1097280) <= sh.top < Emu(1600200):
@@ -1005,7 +1006,7 @@ def check_html(path):
         cls = (slide_classes[i - 1] if i - 1 < len(slide_classes) else "").split()
         nums.append((i, page_number(s)))
         others = [x for x in _leaf_texts(s) if x != t and not re.fullmatch(r"\d{1,3}", x)]
-        APPX_PAGES[i] = (any(APPX_TAG_RE.match(x) for x in others), sum(_fwlen(x) for x in others),
+        APPX_PAGES[i] = (appendix_tag_html(s, m, t), sum(_fwlen(x) for x in others),
                          bool(re.search(r"<(?:table|svg|canvas|video|iframe)\b", s, re.I))
                          or len(re.findall(r"<img\b", s, re.I)) >= 2)  # 画像1枚はロゴとみなす
         # 最終ページは、cover/back の印が無くても、タイトルが無いか締めのあいさつだけのときに限って裏表紙とみなす
@@ -1146,17 +1147,20 @@ def load_colors(path):
         s = line.strip()
         if not s:
             continue
-        m = re.match(r"#?([0-9A-Fa-f]{6})(?![0-9A-Za-z])", s)
+        m = re.match(r"#?([0-9A-Fa-f]{6})(?:[0-9A-Fa-f]{2})?(?![0-9A-Za-z])", s)  # 8桁（透明度つき）は先頭6桁
         if m:
             out.append(m.group(1).upper())
+        elif re.match(r"#?[0-9A-Fa-f]{3,4}(?![0-9A-Za-z])", s):
+            warn(f"{p.name} {n}行目: 3桁の HEX は色として読めないので読み飛ばした「{s[:30]}」（#8A8 → #88AA88 のように6桁で書く）")
         elif not s.startswith("#"):
             warn(f"{p.name} {n}行目: 色として読めないので読み飛ばした「{s[:30]}」（1行1色・HEX 6桁で書く）")
     return out
 
 
 def has_color(c, text):
-    """6桁の HEX がそのまま現れるか（大文字小文字は問わない。前後が16進の文字なら別の値の一部とみなす）"""
-    return re.search(r"(?<![0-9A-Fa-f])" + re.escape(c) + r"(?![0-9A-Fa-f])", text, re.I) is not None
+    """6桁の HEX がそのまま現れるか（大文字小文字は問わない。8桁の透明度つき「#8a8f94cc」も同じ色とみなす。
+    それ以外で前後が16進の文字なら別の値の一部とみなす）"""
+    return re.search(r"(?<![0-9A-Fa-f])" + re.escape(c) + r"(?:[0-9A-Fa-f]{2})?(?![0-9A-Fa-f])", text, re.I) is not None
 
 
 def _cell_text(cell_html):
@@ -1216,11 +1220,42 @@ def check_axis_names_pptx(idx, slide):
 PAGES = []  # [(idx, 本文テキスト)] check_pptx / check_html が詰める
 APPX_PAGES = {}  # {idx: (付録のタグチップがあるか, タイトル以外の文字数, 表・図・画像があるか)} §4.100 用
 APPX_LABEL = r"(?:appendix|付録|参考資料|補足資料)"
-APPX_SEP = r"[\s:：／/|｜・\-－—]"
+APPX_SEP = r"[\s:：／/|｜・\-－—（(【\[「]"
 # 付録ページのタイトル: 「Appendix」「付録」の直後が終わり・区切り記号・空白のとき（「付録の手順書を改め…」は本編）
 APPX_TITLE_RE = re.compile(r"^\s*(?:appendix|付録)(?=$|" + APPX_SEP + ")", re.I)
 # 付録のタグチップ: 要素の文字が「付録」「Appendix」（「Appendix A-1」「付録 2」まで）だけのもの
 APPX_TAG_RE = re.compile(r"^\s*(?:appendix|付録)(?:\s*[A-Za-z0-9][A-Za-z0-9.\-]*)?\s*$", re.I)
+# アジェンダ・目次のページ（項目の「Appendix」は付録のタグではない）
+AGENDA_TITLE_RE = re.compile(r"(?i)agenda|contents|アジェンダ|目次|本日の(?:流れ|内容)|資料の構成")
+# タグチップらしい要素のクラス（「es-tag」のような部品内のラベルは含めない）
+TAG_CLASS_RE = re.compile(r'<(\w+)\b[^>]*\bclass="(?:[^"]*\s)?(?:tag|chip|badge|kicker|eyebrow)(?:\s[^"]*)?"[^>]*>(.*?)</\1>', re.S)
+
+
+def appendix_tag_html(slide, title_match, title):
+    """付録のタグチップがあるか。タグとみなすのは、クラスが tag・chip 等の要素と、タイトル（h1）より前の要素だけ。
+    アジェンダの「<li>Appendix</li>」や表のセルの「付録」は数えない"""
+    if AGENDA_TITLE_RE.search(title or ""):
+        return False
+    cands = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", m.group(2))).strip() for m in TAG_CLASS_RE.finditer(slide)]
+    if title_match:
+        cands += _leaf_texts(slide[:title_match.start()])
+    return any(APPX_TAG_RE.match(x) for x in cands)
+
+
+def appendix_tag_pptx(slide, title_shape, title, sw, sh_):
+    """付録のタグチップがあるか（PPTX）。上端付近（高さの上18%）にある小さい図形の文字だけを見る。
+    本文の「Appendix」だけの図形（アジェンダの項目など）は数えない"""
+    if AGENDA_TITLE_RE.search(title or "") or not sw or not sh_:
+        return False
+    for sh in slide.shapes:
+        if sh is title_shape or not sh.has_text_frame or sh.top is None or sh.height is None or sh.width is None:
+            continue
+        if (sh.top < sh_ * 0.18 and sh.height <= sh_ * 0.1 and sh.width <= sw * 0.3
+                and APPX_TAG_RE.match(sh.text_frame.text.strip())):
+            return True
+    return False
+
+
 # 文になっている（区切りのラベルではなく、付録ページのメッセージ）
 SENTENCE_RE = re.compile(r"[、。]|[がを]|(?:た|だ|る|ます|です|ない|れる)$")
 DIVIDER_MAX_BODY = 100  # 区切りのスライドのタイトル以外の文字数の上限（中身1行＋資料名・ページ番号）
@@ -1285,6 +1320,8 @@ def main():
             usage_error("--old-colors のファイルの指定がない（--old-colors 色の一覧.txt）")
         colors_path = args[k + 1]
         del args[k:k + 2]
+    if brand == "none" and colors_path:
+        print(f"--brand none のため --old-colors {colors_path} は使わない（レガシー色の検査を外している）", file=sys.stderr)
     if brand != "none":
         if colors_path:
             OLD_COLORS[:] = load_colors(colors_path)
