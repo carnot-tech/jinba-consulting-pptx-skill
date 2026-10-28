@@ -573,6 +573,34 @@ class ColumnRuleAlignment(LayoutFeedback20261012):
         self.assertFalse(any("最初の横罫" in l for l in out), out)
 
 
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class ColumnVerticalAlignment(LayoutFeedback20261012):
+    """check_layout：左右2列の縦の揃え方を同じにする（§4.104 WARN）"""
+
+    LEFT = ('<div style="height:38px;border-bottom:1.8px solid #333;font-weight:700">申請の流れ</div>'
+            '<p style="margin:8px 0">申請者が入力してから承認までに平均3日かかる</p><p style="margin:8px 0">差し戻しは月に約20件</p>')
+    RIGHT = '<p style="margin:0">承認待ちの時間を当日中に縮める</p><p style="margin:8px 0 0">差し戻しの理由を入力時に示す</p>'
+
+    def cols(self, left, right, right_style=""):
+        return (f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;height:300px">'
+                f'<div>{left}</div><div style="{right_style}">{right}</div></div>')
+
+    def test_top_aligned_next_to_centered_warns(self):
+        out = self.layout(self.cols(self.LEFT, self.RIGHT, "display:flex;flex-direction:column;justify-content:center"))
+        self.assertTrue(any("縦の揃え方が違う" in l for l in out), out)
+
+    def test_both_top_aligned_passes(self):
+        out = self.layout(self.cols(self.LEFT, self.RIGHT))
+        self.assertFalse(any("縦の揃え方が違う" in l for l in out), out)
+
+    def test_both_centered_passes(self):
+        both = "display:flex;flex-direction:column;justify-content:center"
+        html = (f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;height:300px">'
+                f'<div style="{both}">{self.LEFT}</div><div style="{both}">{self.RIGHT}</div></div>')
+        out = self.layout(html)
+        self.assertFalse(any("縦の揃え方が違う" in l for l in out), out)
+
+
 
 class BotFeedback20261019(unittest.TestCase):
     """check_deck：文字化け（FAIL）・ページ番号の連番（FAIL）・1項目だけの箇条・本文のですます・締めのページ・keep-all・番号つき項目名（WARN）"""
