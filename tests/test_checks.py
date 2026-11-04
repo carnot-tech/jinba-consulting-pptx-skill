@@ -573,6 +573,82 @@ class ColumnRuleAlignment(LayoutFeedback20261012):
         self.assertFalse(any("最初の横罫" in l for l in out), out)
 
 
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class ColumnVerticalAlignment(unittest.TestCase):
+    """check_layout：左右2列の縦の揃え方を同じにする（§4.104 WARN）"""
+
+    layout = LayoutFeedback20261012.layout  # 検査の呼び方だけを借りる（継承すると親のテストが二重に走る）
+
+    def layout_pages(self, bodies):
+        pages = "".join(f'<section class="s"><h1>検査の見本として置いたページのタイトル</h1>{b}'
+                        f'<div class="foot"><span>{9 + i}</span></div></section>' for i, b in enumerate(bodies))
+        html = GOOD.replace("</body>", pages + "</body>", 1)
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "deck.html"
+            p.write_text(html, encoding="utf8")
+            r = subprocess.run(["node", str(ROOT / "scripts" / "check_layout.mjs"), str(p)],
+                               capture_output=True, text=True, cwd=ROOT, encoding="utf8")
+        return r.stdout.splitlines()
+
+    HEAD = '<div style="height:38px;border-bottom:1.8px solid #333;font-weight:700">申請の流れ</div>'
+    LEFT = (HEAD + '<p style="margin:8px 0">申請者が入力してから承認までに平均3日かかる</p><p style="margin:8px 0">差し戻しは月に約20件</p>')
+    RIGHT = '<p style="margin:0">承認待ちの時間を当日中に縮める</p><p style="margin:8px 0 0">差し戻しの理由を入力時に示す</p>'
+    CENTER = "display:flex;flex-direction:column;justify-content:center"
+
+    def cols(self, left, right, right_style="", left_style=""):
+        return (f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;height:300px">'
+                f'<div style="{left_style}">{left}</div><div style="{right_style}">{right}</div></div>')
+
+    def test_top_aligned_next_to_centered_warns(self):
+        out = self.layout(self.cols(self.LEFT, self.RIGHT, self.CENTER))
+        self.assertTrue(any("縦の揃え方が違う" in l for l in out), out)
+
+    def test_both_top_aligned_passes(self):
+        out = self.layout(self.cols(self.LEFT, self.RIGHT))
+        self.assertFalse(any("縦の揃え方が違う" in l for l in out), out)
+
+    def test_both_centered_passes(self):
+        out = self.layout(self.cols(self.LEFT, self.RIGHT, self.CENTER, self.CENTER))
+        self.assertFalse(any("縦の揃え方が違う" in l for l in out), out)
+
+    def test_no_heading_side_starts_at_heading_bottom_passes(self):
+        # §4.104 の作法どおり、見出しのない側を見出しの下端の高さから始める
+        out = self.layout(self.cols(self.LEFT, self.RIGHT, "padding-top:46px"))
+        self.assertFalse(any("縦の揃え方が違う" in l for l in out), out)
+
+    def test_h3_heading_side_starts_at_heading_bottom_passes(self):
+        left = '<h3 style="margin:0;height:38px">申請の流れ</h3>' + self.LEFT[len(self.HEAD):]
+        out = self.layout(self.cols(left, self.RIGHT, "padding-top:46px"))
+        self.assertFalse(any("縦の揃え方が違う" in l for l in out), out)
+
+    def test_figure_with_caption_and_centered_bullets_passes(self):
+        # §4.26: 図の横の説明だけを縦中央に置くのは可。図にキャプションがあっても同じ
+        fig = ('<svg width="100%" height="240"><rect width="100%" height="240" fill="#C5A681"/></svg>'
+               '<p style="margin:4px 0 0;font-size:11px">図1 申請から承認までの日数</p>')
+        out = self.layout(self.cols(fig, self.RIGHT, self.CENTER))
+        self.assertFalse(any("縦の揃え方が違う" in l for l in out), out)
+
+    def test_top_aligned_next_to_centered_bordered_box_warns(self):
+        # 枠付きの箱の上罫を見出し帯の下罫と取り違えない
+        left = '<p style="margin:0">申請者が入力してから承認までに平均3日かかる</p><p style="margin:8px 0">差し戻しは月に約20件</p>'
+        box = ('<div style="border:1px solid #333;padding:12px;height:140px">'
+               '<p style="margin:0">承認待ちの時間を当日中に縮める</p><p style="margin:8px 0 0">差し戻しの理由を入力時に示す</p></div>')
+        out = self.layout(self.cols(left, box, self.CENTER))
+        self.assertTrue(any("縦の揃え方が違う" in l for l in out), out)
+
+    def test_filled_heading_band_side_starts_at_band_bottom_passes(self):
+        # 塗りだけの見出し帯（罫なし）も見出しとして数える
+        head = '<div style="height:38px;background:#E9DFD2;font-weight:700">申請の流れ</div>'
+        left = head + self.LEFT[len(self.HEAD):]
+        out = self.layout(self.cols(left, self.RIGHT, "padding-top:46px"))
+        self.assertFalse(any("縦の揃え方が違う" in l for l in out), out)
+
+    def test_previous_page_warning_does_not_hide_next_page(self):
+        bad = self.cols(self.LEFT, self.RIGHT, self.CENTER)
+        out = self.layout_pages([bad, '<div style="height:20px"></div>' + bad])
+        pages = {l.split(":")[0] for l in out if "縦の揃え方が違う" in l}
+        self.assertEqual(len(pages), 2, out)
+
 
 class BotFeedback20261019(unittest.TestCase):
     """check_deck：文字化け（FAIL）・ページ番号の連番（FAIL）・1項目だけの箇条・本文のですます・締めのページ・keep-all・番号つき項目名（WARN）"""
