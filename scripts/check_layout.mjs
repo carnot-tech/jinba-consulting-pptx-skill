@@ -442,10 +442,25 @@ const { issues, warns } = await page.evaluate(() => {
           return [top, bot];
         };
         // 列の見出し帯の下端（列の上端からの距離。見出しが無ければ 0）。
-        // 上のほうの横罫（check 15 と同じ測り方）か、先頭の子が h2〜h6 ならその下端を見出し帯とみなす
+        // 見出し帯として数えるのは次の3つ。どれも列の中身の先頭にあり、下端が列の上端から90px以内のもの:
+        //   (a) 下罫だけを持つ見出し（.colh など。上罫・四辺の枠は持たない）で、罫より上に文字があるもの
+        //   (b) 塗りだけの見出し帯（枠なし・高さ60px以内）で、その下にも列の中身が続くもの
+        //   (c) 先頭の子が h2〜h6
+        // 四辺に枠のある箱や上罫は見出しとみなさない（縦中央に置いた枠付きの箱を見出し帯と取り違えないため）
+        const ruled = (st, k) => parseFloat(st[`border${k}Width`]) >= 1 && st[`border${k}Style`] !== "none";
         const headBand = (c, cr) => {
-          const y = firstRule(c, cr);
-          if (y > 0 && y <= 90) return y;
+          const [colTop, colBot] = contentSpan(c);
+          if (!isFinite(colTop)) return 0;
+          for (const el of c.querySelectorAll("*")) {
+            if (el.closest("svg, table")) continue;
+            const st = getComputedStyle(el);
+            if (st.display === "none" || st.visibility === "hidden" || !(el.textContent || "").trim()) continue;
+            const r = el.getBoundingClientRect();
+            if (r.top > colTop + 2 || r.width < cr.width * 0.5 || r.bottom - cr.top > 90 || r.bottom - cr.top <= 0) continue;
+            if (ruled(st, "Top") || ruled(st, "Left") || ruled(st, "Right")) continue;
+            if (ruled(st, "Bottom")) return r.bottom - cr.top;
+            if (isFilled(st) && r.height <= 60 && colBot > r.bottom + 4) return r.bottom - cr.top;
+          }
           const h = [...c.children].find((x) => getComputedStyle(x).display !== "none");
           if (h && /^H[2-6]$/.test(h.tagName) && c.children.length > 1) {
             const hb = h.getBoundingClientRect().bottom - cr.top;

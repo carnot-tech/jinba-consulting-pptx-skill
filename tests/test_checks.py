@@ -628,6 +628,21 @@ class ColumnVerticalAlignment(unittest.TestCase):
         out = self.layout(self.cols(fig, self.RIGHT, self.CENTER))
         self.assertFalse(any("縦の揃え方が違う" in l for l in out), out)
 
+    def test_top_aligned_next_to_centered_bordered_box_warns(self):
+        # 枠付きの箱の上罫を見出し帯の下罫と取り違えない
+        left = '<p style="margin:0">申請者が入力してから承認までに平均3日かかる</p><p style="margin:8px 0">差し戻しは月に約20件</p>'
+        box = ('<div style="border:1px solid #333;padding:12px;height:140px">'
+               '<p style="margin:0">承認待ちの時間を当日中に縮める</p><p style="margin:8px 0 0">差し戻しの理由を入力時に示す</p></div>')
+        out = self.layout(self.cols(left, box, self.CENTER))
+        self.assertTrue(any("縦の揃え方が違う" in l for l in out), out)
+
+    def test_filled_heading_band_side_starts_at_band_bottom_passes(self):
+        # 塗りだけの見出し帯（罫なし）も見出しとして数える
+        head = '<div style="height:38px;background:#E9DFD2;font-weight:700">申請の流れ</div>'
+        left = head + self.LEFT[len(self.HEAD):]
+        out = self.layout(self.cols(left, self.RIGHT, "padding-top:46px"))
+        self.assertFalse(any("縦の揃え方が違う" in l for l in out), out)
+
     def test_previous_page_warning_does_not_hide_next_page(self):
         bad = self.cols(self.LEFT, self.RIGHT, self.CENTER)
         out = self.layout_pages([bad, '<div style="height:20px"></div>' + bad])
