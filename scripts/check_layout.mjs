@@ -430,16 +430,36 @@ const { issues, warns } = await page.evaluate(() => {
       // 31. 左右2列の縦の揃え方（片方は上詰め、片方は縦中央・下寄せ、の組み合わせ。§4.104）
       {
         // 列の中で中身（文字・図・塗りや枠のある箱）が始まる高さと終わる高さ。列の上端・下端からの距離で見る
-        const contentSpan = (c) => {
+        // minTop より上（見出し帯の中）にあるものは数えない
+        const contentSpan = (c, minTop = -Infinity) => {
           let top = Infinity, bot = -Infinity;
           for (const el of [c, ...c.querySelectorAll("*")]) {
             const st = getComputedStyle(el);
             if (st.display === "none" || st.visibility === "hidden") continue;
             const rs = /^(svg|img|canvas)$/i.test(el.tagName) || (el !== c && isBoxed(st)) ? [el.getBoundingClientRect()] : ownTextRects(el);
-            for (const r of rs) if (r.width > 1 && r.height > 1) { top = Math.min(top, r.top); bot = Math.max(bot, r.bottom); }
+            for (const r of rs) if (r.width > 1 && r.height > 1 && r.top >= minTop - 1) { top = Math.min(top, r.top); bot = Math.max(bot, r.bottom); }
           }
           return [top, bot];
         };
+        // 列の見出し帯の下端（列の上端からの距離。見出しが無ければ 0）。
+        // 上のほうの横罫（check 15 と同じ測り方）か、先頭の子が h2〜h6 ならその下端を見出し帯とみなす
+        const headBand = (c, cr) => {
+          const y = firstRule(c, cr);
+          if (y > 0 && y <= 90) return y;
+          const h = [...c.children].find((x) => getComputedStyle(x).display !== "none");
+          if (h && /^H[2-6]$/.test(h.tagName) && c.children.length > 1) {
+            const hb = h.getBoundingClientRect().bottom - cr.top;
+            if (hb > 0 && hb <= 90) return hb;
+          }
+          return 0;
+        };
+        // 図の列（列の面積の30%以上を svg・img・canvas が占める）。図の横の説明だけを縦中央に置くのは §4.26 で認めている
+        const isFigure = (c, cr) => [...c.querySelectorAll("svg, img, canvas")].some((f) => {
+          if (f.parentElement?.closest("svg")) return false;
+          const r = f.getBoundingClientRect();
+          return r.width * r.height >= cr.width * cr.height * 0.3;
+        });
+        let hit = false;
         for (const g of s.querySelectorAll("*")) {
           const gs = getComputedStyle(g);
           const row = gs.display.includes("grid") || (gs.display.includes("flex") && !gs.flexDirection.startsWith("column"));
@@ -451,19 +471,26 @@ const { issues, warns } = await page.evaluate(() => {
           if (cols.length !== 2) continue;
           const [ra, rb] = cols.map((c) => c.getBoundingClientRect());
           if (Math.abs(ra.top - rb.top) > 4 || Math.abs(ra.bottom - rb.bottom) > 4 || ra.right > rb.left + 1) continue; // 上下の端が揃った左右の列だけ
-          const [ta, ba] = contentSpan(cols[0]), [tb, bb] = contentSpan(cols[1]);
+          if (isFigure(cols[0], ra) || isFigure(cols[1], rb)) continue;
+          // 見出しのある列は見出しの直下を、見出しのない列は相手の見出しの下端を基準にする（§4.104: 見出しのない側は見出しの高さに合わせる）。
+          // 基準より上から始まる列は上詰めとして扱う（見出しの高さとのずれは check 15 の領分）
+          const band = [headBand(cols[0], ra), headBand(cols[1], rb)];
+          const base = [band[0] || band[1], band[1] || band[0]];
+          const [ta, ba] = contentSpan(cols[0], ra.top + band[0]), [tb, bb] = contentSpan(cols[1], rb.top + band[1]);
           if (!isFinite(ta) || !isFinite(tb)) continue;
-          const gapTop = [ta - ra.top, tb - rb.top], gapBot = [ra.bottom - ba, rb.bottom - bb];
-          const line = Math.max(bodySize(s), 12);
-          // 片方は上端から1行以内に始まり、もう片方は2.5行以上下がって始まる。下がった側は下にも空きがある（縦中央・下寄せ）か、上の空きが列の高さの15%超
+          const gapTop = [Math.max(0, ta - ra.top - base[0]), Math.max(0, tb - rb.top - base[1])], gapBot = [ra.bottom - ba, rb.bottom - bb];
+          // 本文の文字の大きさ（「あ」1文字の幅）を単位にする
+          const em = Math.max(bodySize(s), 12);
+          // 片方は基準から1文字分以内に始まり、もう片方は2.5文字分以上下がって始まる。下がった側は下にも空きがある（縦中央・下寄せ）か、上の空きが列の高さの15%超
           for (const k of [0, 1]) {
             const o = 1 - k;
-            if (gapTop[k] <= line && gapTop[o] - gapTop[k] >= line * 2.5 && (gapBot[o] >= line || gapTop[o] > ra.height * 0.15)) {
+            if (gapTop[k] <= em && gapTop[o] - gapTop[k] >= em * 2.5 && (gapBot[o] >= em || gapTop[o] > ra.height * 0.15)) {
               warnOut.push(`p${n}: 左右の列の縦の揃え方が違う（${k === 0 ? "左" : "右"}は上詰め、${o === 0 ? "左" : "右"}は ${Math.round(gapTop[o])}px 下がって始まる。§4.104: 両方を上詰めにするか、両方を縦中央にして空きを上下に分ける）`);
+              hit = true;
               break;
             }
           }
-          if (warnOut.length && warnOut[warnOut.length - 1].includes("§4.104")) break;
+          if (hit) break;
         }
       }
       // 16. 塗り・枠のある大きな箱の中の空き（版面の空き判定は箱を「埋まっている」と数えるので、中身の空きを別に測る）
