@@ -1,6 +1,7 @@
 {
   "name": "consulting-pptx-skill",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "HTML デッキの PDF 化・実レンダリング検査に使う playwright と Chromium headless shell だけを依存に持つ（Chromium 本体は入れない）",
   "scripts": {
     "setup": "npm install && npx playwright install --only-shell chromium",
