@@ -28,7 +28,7 @@
 ### パーツ集・型カタログを直す
 
 - 色・書体は両パーツ集（`templates/freeform_parts_16x9.html`・`freeform_parts_more_16x9.html`）の `:root` を揃える
-- 型を足した・見た目を変えたときは `references/archetype-catalog.md` も更新する。`assets/SlideCatalog_16x9.pdf` の再生成が要る場合は PR にそう書く
+- 型を足した・名前を変えたときは、パーツ集の `<!-- ═══ パーツNN: 名前 -->` のコメントを直す（`new_deck.py --list --all` はここから名前を読む）。Releases の型カタログ PDF の作り直しが要る場合は PR にそう書く
 
 ### 文書
 

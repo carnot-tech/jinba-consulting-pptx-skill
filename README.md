@@ -29,7 +29,7 @@ A Claude Code skill for generating boardroom-quality decks: a slide-design ruleb
 
 ## 65型のスライド型カタログ
 
-入口は **[assets/SlideCatalog_16x9.pdf](assets/SlideCatalog_16x9.pdf)**（65ページ）です。P.1〜30 が基本パーツ集、P.31〜65 が追加パーツ集を印刷したもので、型ID・型名・使いどころの一覧は [references/archetype-catalog.md](references/archetype-catalog.md) にあります。
+見本の PDF（65ページ）は **[Releases の型カタログ](https://github.com/carnot-tech/jinba-consulting-pptx-skill/releases/tag/catalog-2026-11)** に添付しています。P.1〜30 が基本パーツ集、P.31〜65 が追加パーツ集を印刷したものです。番号と型名の一覧は `python3 scripts/new_deck.py --list --all` で出ます（★がよく使う20種類）。
 
 「65型」は作れる見せ方の上限ではありません。実際のデッキでは、型を組み合わせたり崩したりして規約の範囲で自由に組むので、見せ方のパターンはこれより多くなります。型カタログは「レイアウトの発想帳」として使い、合わなければ捨ててください。
 
@@ -119,7 +119,8 @@ python3 scripts/check_deck.py pages.pptx --house house.skin.json
 | `templates/freeform_parts_16x9.html` | 基本パーツ集（30パーツ・1パーツ=1スライド・16:9） |
 | `templates/freeform_parts_more_16x9.html` | 追加パーツ集（35パーツ。チャート・比較表・マトリクス・計画系） |
 | `references/slide-rules.md` | スライド作成ルール正典 |
-| `references/archetype-catalog.md` | 65型の型カタログ（型ID・型名・使いどころ・どのパーツ集の何番か） |
+| `references/pptx.md`・`references/pitch.md` | 正典から分けた、PPTX にする・差し込む作法（§8.6・§8.7）と登壇用ピッチの作法（§9）。番号のまま `rules.py --sec` で引ける |
+| `references/working-practices.md` | 作業の作法（着手時の確認・シリーズ物・レビューの回し方・目視QAの報告・直し方と渡し方） |
 | `references/content-review-prompt.md` | フレッシュアイ・レビューの指示文。機械チェックのあと、作り方を伏せた別エージェントにデッキのファイルを渡して日本語・論理・破綻を拾わせ、採否表にして直す |
 | `references/ai-smell-lexicon.md` | AI臭ワード・言い回しのリストとセルフチェック |
 | `references/rules-digest.md` | 規約の要点版（工程ごと。各行に正典の § 番号）。`scripts/rules.py --phase <工程>` で表示する |
@@ -134,8 +135,6 @@ python3 scripts/check_deck.py pages.pptx --house house.skin.json
 | `scripts/measure_deck.py` | 既存の PowerPoint 資料の書式（レイアウト・タイトルの枠・文字の大きさ・書体の指定の有無・罫線・色）を測り、`skin.json` に書き出す |
 | `scripts/deck_pptx.py` | 測った書式で、その資料のマスターの上に編集可能なページを組む部品（タイトル・見出し・罫線の表・強調の面・矢羽・✓✕△）。作例は `examples/house_deck_example.py` |
 | `tests/` | 機械チェックの自己テスト（`python3 -m unittest discover -s tests`）。指摘を機械チェックにしたら、直していない版で FAIL が出ることをここで確かめる |
-| `assets/SlideCatalog_16x9.pdf` | **65型のスライド型カタログ（両パーツ集を印刷した65ページ）。型を探すときの入口** |
-| `assets/SuperTemplate_62type.pptx` | 62型のPPTX見本帳（全スライド編集可能。基本パーツ集の b28〜b30 は未収録）。PowerPoint で手動コピーして使うときの見本。パーツ集の正本ではない |
 
 ## カスタマイズ
 

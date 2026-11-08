@@ -4,7 +4,7 @@
 使い方:
   python3 check_deck.py out.pptx
   python3 check_deck.py deck.html
-  python3 check_deck.py assets/SuperTemplate_36type.pptx --template   # テンプレ集そのものを検査するとき
+  python3 check_deck.py templates/freeform_parts_16x9.html --template   # パーツ集そのものを検査するとき
   python3 check_deck.py deck.html --forbid ~/.config/deck-forbidden-terms.txt   # 顧客名・社内語の残りを FAIL
   python3 check_deck.py pages.pptx --house house.skin.json   # 既存の資料へ差し込むページ（slide-rules §8.7）
   python3 check_deck.py out.pptx --xml-only                  # PowerPoint が開けなくなる不正だけを見る

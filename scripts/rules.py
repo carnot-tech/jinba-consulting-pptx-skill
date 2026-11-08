@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""rules.py — 規約の正典 references/slide-rules.md から、いまの工程に要る節だけを取り出して表示する。
+"""rules.py — 規約の正典 references/slide-rules.md（と、そこから分けた pptx.md・pitch.md）から、いまの工程に要る節だけを取り出して表示する。
 
 規約は1つのファイル（正本）のまま。全文を最初に読み込む代わりに、工程ごとにこのスクリプトで引く。
 --phase の既定は要点版（references/rules-digest.md の該当工程。数千字）。節全体が要るときだけ --full を付ける。
@@ -22,8 +22,11 @@ import re
 import sys
 from pathlib import Path
 
-RULES = Path(__file__).resolve().parent.parent / "references" / "slide-rules.md"
-DIGEST = Path(__file__).resolve().parent.parent / "references" / "rules-digest.md"
+REF = Path(__file__).resolve().parent.parent / "references"
+RULES = REF / "slide-rules.md"
+# §8.6・§8.7 と §9 は別ファイルに分けてある。節番号はそのまま引ける
+PARTS = [RULES, REF / "pptx.md", REF / "pitch.md"]
+DIGEST = REF / "rules-digest.md"
 
 # 工程 → 読む範囲。"§N" は節全体、"§4:見出しの一部" は §4 の小見出し単位、"head" は冒頭（用語・資料の種類の表）
 PHASES = {
@@ -40,7 +43,14 @@ PHASES = {
 
 
 def load():
-    lines = RULES.read_text(encoding="utf8").split("\n")
+    lines = []
+    for f in PARTS:
+        if f.exists():
+            # 2つ目以降のファイルの「# 見出し」と前置きは読み飛ばし、## の節だけを取る
+            body = f.read_text(encoding="utf8").split("\n")
+            if f is not RULES:
+                body = body[next((i for i, ln in enumerate(body) if ln.startswith("## ")), len(body)):]
+            lines += body
     head, secs, cur = [], {}, None
     for ln in lines:
         m = re.match(r"^## (\d+(?:\.\d+)?)\.?\s", ln)
