@@ -8,7 +8,7 @@
 全ページを見る精度は保ったまま、画像を読む回数を減らすための道具。崩れが疑わしいページは
 --page 5 で1ページだけ大きく出して確かめる。
 依存: Chromium headless shell（`npm run setup` で入る。CHROME_PATH で Chrome 本体にも切り替えられる。探し方は find_browser.py）、
-pdftoppm（poppler）、Pillow。
+pdftoppm（poppler。`npm run setup` / `setup:linux` では入らないので別途インストールが必要）、Pillow。
 """
 import argparse
 import shutil
@@ -42,6 +42,14 @@ def main():
         old.unlink()
     subprocess.run([chrome(), "--headless", "--disable-gpu", "--no-pdf-header-footer", f"--print-to-pdf={pdf}", str(deck)],
                    capture_output=True, check=True)
+    if shutil.which("pdftoppm") is None:
+        msg = ("pdftoppm が見つからない。画像化には poppler が必要: "
+               "macOS は brew install poppler、Ubuntu は sudo apt install poppler-utils、"
+               "Windows は poppler-windows の Release を展開して Library\\bin を PATH に追加する"
+               "（または conda install -c conda-forge poppler）。`npm run setup` / `setup:linux` で入るのは Chromium のみ。")
+        if pdf.exists():
+            msg += f"PDF 自体は {pdf} に作られている。"
+        sys.exit(msg)
     try:
         from PIL import Image, ImageDraw
     except ImportError:
