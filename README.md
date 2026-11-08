@@ -120,6 +120,7 @@ python3 scripts/check_deck.py pages.pptx --house house.skin.json
 | `templates/freeform_parts_more_16x9.html` | 追加パーツ集（35パーツ。チャート・比較表・マトリクス・計画系） |
 | `references/slide-rules.md` | スライド作成ルール正典 |
 | `references/pptx.md`・`references/pitch.md` | 正典から分けた、PPTX にする・差し込む作法（§8.6・§8.7）と登壇用ピッチの作法（§9）。番号のまま `rules.py --sec` で引ける |
+| `references/slide-examples.md` | 規約を特定の種類のページ（体制表・工程図・会話の図など）に当てはめた例。規則ではない |
 | `references/working-practices.md` | 作業の作法（着手時の確認・シリーズ物・レビューの回し方・目視QAの報告・直し方と渡し方） |
 | `references/content-review-prompt.md` | フレッシュアイ・レビューの指示文。機械チェックのあと、作り方を伏せた別エージェントにデッキのファイルを渡して日本語・論理・破綻を拾わせ、採否表にして直す |
 | `references/ai-smell-lexicon.md` | AI臭ワード・言い回しのリストとセルフチェック |

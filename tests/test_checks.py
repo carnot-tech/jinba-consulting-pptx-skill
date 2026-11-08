@@ -934,6 +934,25 @@ class StructureF(unittest.TestCase):
         r = subprocess.run([sys.executable, str(ROOT / "scripts" / "rules.py"), "--sec", *refs], capture_output=True, text=True)
         self.assertNotIn("見つからない", r.stderr, r.stderr)
 
+    def test_merged_rule_forwards_to_target(self):
+        # 統合した番号（§4.104 → §4.51）を引くと、統合先の本文も出る
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "rules.py"), "--sec", "4.104"], capture_output=True, text=True)
+        self.assertIn("§4.51（統合先）", r.stdout)
+        self.assertIn("縦の揃え方", r.stdout)
+
+    def test_merge_targets_exist_and_are_not_stubs(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import rules
+        _, secs = rules.load()
+        for n, lines in secs.items():
+            for k, v in rules.items(lines).items():
+                m = re.search(r"（§(\d+)\.(\d+) に統合", v[0])
+                if not m:
+                    continue
+                to = rules.items(secs[m.group(1)]).get(m.group(2))
+                self.assertTrue(to, f"§{n}.{k} の統合先 §{m.group(1)}.{m.group(2)} が無い")
+                self.assertNotIn("に統合", to[0], f"§{n}.{k} の統合先がさらに統合されている")
+
     def test_digest_is_built_from_canon(self):
         # 要点版は build_digest.py が規約から作る。規約を直して作り直し忘れたら FAIL
         r = subprocess.run([sys.executable, str(ROOT / "scripts" / "build_digest.py"), "--check"], capture_output=True, text=True)

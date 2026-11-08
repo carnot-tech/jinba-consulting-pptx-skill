@@ -14,7 +14,7 @@
   python3 scripts/rules.py --phase check       # 検査と直し（§8）
   python3 scripts/rules.py --phase pptx        # PPTX にする・既存の PPTX に差し込む（§8.6・§8.7）
   python3 scripts/rules.py --phase pitch       # 登壇用のピッチ（§9）
-  python3 scripts/rules.py --sec 4.12 5.26     # 検査の指摘に出た項だけを引く
+  python3 scripts/rules.py --sec 4.12 5.26     # 検査の指摘に出た項だけを引く（統合した番号は統合先も出す）
   python3 scripts/rules.py --phases            # 工程と節の対応表
 """
 import argparse
@@ -148,6 +148,12 @@ def main():
             print(f"見つからない: §{s}", file=sys.stderr)
             continue
         out.append(f"§{s}\n" + "\n".join(it))
+        # 統合した項は「（§4.51 に統合）」の1行だけを残してある。統合先も続けて出す
+        fw = re.search(r"（§(\d+)\.(\d+) に統合", it[0])
+        if fw:
+            to = items(secs[fw.group(1)]).get(fw.group(2))
+            if to:
+                out.append(f"§{fw.group(1)}.{fw.group(2)}（統合先）\n" + "\n".join(to))
     print("\n\n".join(x for x in out if x.strip()))
 
 
