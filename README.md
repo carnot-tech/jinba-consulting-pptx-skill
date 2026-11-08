@@ -123,7 +123,7 @@ python3 scripts/check_deck.py pages.pptx --house house.skin.json
 | `references/working-practices.md` | 作業の作法（着手時の確認・シリーズ物・レビューの回し方・目視QAの報告・直し方と渡し方） |
 | `references/content-review-prompt.md` | フレッシュアイ・レビューの指示文。機械チェックのあと、作り方を伏せた別エージェントにデッキのファイルを渡して日本語・論理・破綻を拾わせ、採否表にして直す |
 | `references/ai-smell-lexicon.md` | AI臭ワード・言い回しのリストとセルフチェック |
-| `references/rules-digest.md` | 規約の要点版（工程ごと。各行に正典の § 番号）。`scripts/rules.py --phase <工程>` で表示する |
+| `references/rules-digest.md` | 規約の要点版（工程ごと。各行に正典の § 番号）。`scripts/rules.py --phase <工程>` で表示する。`scripts/build_digest.py` が規約から作る（手で直さない） |
 | `references/jinba-context.md` | Jinba の公開情報と、AI 活用・業務自動化のデッキでの触れ方（触れないときの条件つき） |
 | `scripts/new_deck.py` | パーツ番号を並べて1本のデッキHTMLを生成（両パーツ集のCSSをスコープして結合・ページ番号の振り直し）。`--list` でよく使う20種類と使いどころ、`--show b09` で1部品のHTML |
 | `scripts/rules.py` | 規約を工程ごとに引く（`--phase plan` など＝要点版、`--sec 4.12` で1項、`--full` で節全体） |

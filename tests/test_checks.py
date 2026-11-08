@@ -934,6 +934,11 @@ class StructureF(unittest.TestCase):
         r = subprocess.run([sys.executable, str(ROOT / "scripts" / "rules.py"), "--sec", *refs], capture_output=True, text=True)
         self.assertNotIn("見つからない", r.stderr, r.stderr)
 
+    def test_digest_is_built_from_canon(self):
+        # 要点版は build_digest.py が規約から作る。規約を直して作り直し忘れたら FAIL
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "build_digest.py"), "--check"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
     def test_digest_has_all_phases(self):
         digest = (ROOT / "references" / "rules-digest.md").read_text(encoding="utf8")
         for ph in ("plan", "build", "chart", "table", "process", "text", "check"):

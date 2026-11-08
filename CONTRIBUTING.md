@@ -18,6 +18,8 @@
 2. `scripts/check_deck.py`／`scripts/check_layout.mjs` に判定を足す
 3. `tests/` に「直していない版で FAIL が出る」「直した版で出ない」の 2 件を足す
 
+規約を直したら `python3 scripts/build_digest.py` で要点版 `references/rules-digest.md` を作り直す（手で直さない。作り直し忘れはテストが FAIL にする）。検査のしきい値を変えたら、§8 の「検査のしきい値」の表も同じ PR で直す。
+
 測れない指摘（言い回し・論理）は規約の 1 行だけでよい。その場合は PR に「測れない理由」を 1 行書く。
 
 ### スクリプト（scripts/）を直す
