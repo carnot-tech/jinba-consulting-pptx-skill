@@ -5,57 +5,42 @@ description: スライド設計規約 slide-rules.md を核に、経営会議品
 
 # コンサル型スライド作成スキル
 
-主軸は規約の正典 `references/slide-rules.md`。最初に全文を読まない。**工程ごとに `scripts/rules.py --phase <工程>` で要点（数千字。切らずに全部読む）を読み、詳しい根拠が要る項だけ `--sec 4.12` で引く。** 部品は規約を満たすことを確かめた20種類（`new_deck.py --list`）から選ぶ。
+規約の正典は `references/slide-rules.md`。全文は読まず、**工程ごとに `scripts/rules.py --phase <工程>` の要点を切らずに読み、根拠が要る項だけ `--sec 4.12` で引く。** 成果物は HTML（16:9・1 section = 1スライド）と `snapshot.py` で印刷した PDF。
 
-成果物は HTML（16:9・1 section = 1スライド）と、`snapshot.py` で印刷した PDF。
+| 工程 | 読む・使う |
+| --- | --- |
+| 1. 定義 | `--phase plan`、`references/working-practices.md` |
+| 2. 調べる | 一次情報。確かめた数字は `sources.md` に控える |
+| 3. ストーリーライン | `new_deck.py --list` |
+| 4. 骨組み | `new_deck.py --parts ...`（作りを見るときだけ `--show b09`） |
+| 5. 中身を書く | `--phase build`、形に応じて `chart` / `table` / `process` |
+| 6. 文章を仕上げる | `--phase text`、`references/ai-smell-lexicon.md` |
+| 7. 検査と直し | `check_all.py`、指摘に出た節だけ `--sec` |
+| 8. 最後の確認 | `--phase check`、`snapshot.py` の PDF と画像 |
+| 9. フレッシュアイ・レビュー | `references/content-review-prompt.md` |
 
-## 読むもの・使うもの
-
-| 工程 | 読む・使う | 読まない |
-| --- | --- | --- |
-| 1. 定義 | `rules.py --phase plan`、`references/working-practices.md` | — |
-| 2. 調べる | 一次情報。確かめた数字は `sources.md` に控える | 検索結果の抜粋だけで数字を拾わない |
-| 3. ストーリーライン | 1 の内容と `new_deck.py --list` | パーツ集の原本 |
-| 4. 骨組み | `new_deck.py --parts ...`（作りを確かめるときだけ `--show b09`） | パーツ集の原本、`scripts/` の中身 |
-| 5. 中身を書く | `--phase build`、形に応じて `chart` / `table` / `process` | — |
-| 6. 文章を仕上げる | `--phase text`、`references/ai-smell-lexicon.md` | — |
-| 7. 検査と直し | `check_all.py`、指摘に出た節だけ `--sec` | 規約の全文 |
-| 8. 最後の確認 | `--phase check`、`snapshot.py` の PDF と画像 | — |
-| 9. フレッシュアイ・レビュー | `references/content-review-prompt.md` | — |
-
-- `local/`（git 管理外）に利用者の組織の規約 `slide-rules.local.md`・禁止語 `forbid.txt`・レガシー色 `old-colors.txt` があれば工程1で読む（check_deck は指定なしで読む。他社の書式で組むときは `--brand none`）。両方に当たる規則は local が優先。
-- テーマが AI の活用・業務の自動化なら、工程1で `references/jinba-context.md` も読む。
-- PPTX にするときは `--phase pptx`（`references/pptx.md`）、登壇用のピッチは `--phase pitch`（`references/pitch.md`）を工程1で足す。
+- 工程1で足して読むもの：`local/`（git 管理外）の `slide-rules.local.md`・`forbid.txt`・`old-colors.txt`（local が優先。他社の書式で組むときは check_deck に `--brand none`）／テーマが AI・業務の自動化なら `references/jinba-context.md`／PPTX にするなら `--phase pptx`／登壇用ピッチなら `--phase pitch`。
 
 ## 手順
 
-1. **定義する**: 目的・成果物の定義・スコープ IN/OUT を3〜5行で決める。依頼の背景（誰に・どの会議で・何を判断してもらうか）が分からなければ聞く。聞けないときは前提を置き、報告に書く。背景が分からないうちはデッキにせず、1枚の論点整理かテキストで出す。
-2. **調べる（必須）**: 載せる数字・事例・固有名詞は、作る前に一次情報（公式発表・統計・調査の原典）で確かめ、`sources.md` に1行ずつ控える（数字・何の数字か・出典名・URL・時点）。試算・計画値は前提と算式も書く。**試算は暗算せず `python3 -c` で計算し、式・入力・結果を貼る。** 見つからない数字は作らず「要確認」と書く。`sources.md` と `qa.md` はデッキと同じフォルダに置く（スキルのフォルダに置かない）。
-3. **ストーリーラインを書く（中身 → 形 → 部品の順）**: 1枚1行の主張（タイトル）の列を書き、各行の形を材料の関係（比較・推移・内訳・因果・位置づけ・手順）から決め（§5.12）、最後に部品を選ぶ。定番の並びは固定しない（§4.103）。社名と数字を消しても別の会社の資料として通る列なら型どおりなので、材料に固有の発見を主役にするか、薄いページをまとめる。材料が目安（表4行・グラフ1本＋読み取り2〜3点・箇条6行）に届かない行は隣とまとめ、枚数を薄いページで稼がない。ストーリーラインと各ページの「タイトル／結論／載せる内容／見せ方」を文章で出し、合意してから組む。
-4. **骨組みを作る**: `python3 scripts/new_deck.py --parts b01,m01,b09:axb,m05,b10 --title "資料名" -o mydeck.html`。CSS の結合・見出しの様式・ページ番号はスクリプトが揃える。合う部品が無ければ `--list --all` を見るか、規約の範囲で自由に組む。
-5. **中身をまとめて書く**: 読んだ基準のとおりに、伏せ字（`Text N`・`ラベル N`・`パーツNN｜…`）を全部実物に置き換えた完成版を**1回の Write で書く**。数字は `sources.md` の値だけを使い、試算の前提と算式はそのページの注か付録に書く。初稿の FAIL の大半は次の3つ: 1つの箇条・セルに1文（§7.24）／タイトルは数でなく中身（§4.103）／中身の少ないページは文字を一段大きくするか前後とまとめる（§5.13）。
-6. **文章を仕上げる**: タイトルを上から通し読みし、必要なページだけ Edit する。
-7. **検査をまとめて回し、まとめて直す**: `python3 scripts/check_all.py mydeck.html --sources sources.md`（check_deck・check_layout・出典の照合を1回で回す。`PLAYWRIGHT_MODULE_DIR` が無いときだけ `npm run setup`）。指摘の節を `--sec` で引き、ページごとにまとめて直す。
-   - 直しは形（大きさ・配置・分け方・統合）で行い、**指摘を消すために中身（数字・事例・行）を足さない。**
-   - 部品の CSS を上書きして高さや間隔を伸ばさない（`height:100%`・`flex:1`・`min-height` など）。タイトルの 22pt も変えない。空きの指摘に付く zoom の試算（1.15倍まで）はそのまま使い、収まらないページはまとめるか形を変える。
-   - 直したらもう一度だけ回し、FAIL 0 で次へ。**WARN は直すのが既定。** 残すのは規約に書かれた例外の条件に当たるときだけで、その § を qa.md に書く。
-8. **PDF で全ページを見る**: `python3 scripts/snapshot.py mydeck.html` で PDF と4ページずつの画像を作り、全部見る（pdftoppm は別途入れる）。§8 の目視の基準を当て、怪しいページは `--page N` で大きく出す。**見た結果を `qa.md` にページごとに書く**（当てた基準・見つけた崩れ・直したか。無ければ「該当なし」）。崩れを直したら `check_all.py` をもう一度回す。
-9. **フレッシュアイ・レビュー**（速度優先と言われたとき以外）: `content-review-prompt.md` の指示文を、作り方を伏せて別エージェントに渡し、デッキのファイルをそのまま読ませる。指摘を採否表にして採用分を直し、機械チェックを回し直す。1ラリーで止めて「もう1ラリー回すか」を聞く（回し方は `working-practices.md`）。
+1. **定義する**: 目的・成果物の定義・スコープ IN/OUT を3〜5行で決める。誰に・どの会議で・何を判断してもらうかが分からなければ聞く。聞けなければ前提を置いて報告に書き、デッキにせず1枚の論点整理で出す。
+2. **調べる（必須）**: 載せる数字・事例・固有名詞は一次情報で確かめ、`sources.md` に1行ずつ控える（数字・何の数字か・出典名・URL・時点）。試算は `python3 -c` で計算し、式・入力・結果を貼る。見つからない数字は作らず「要確認」と書く。`sources.md` と `qa.md` はデッキと同じフォルダに置く。
+3. **ストーリーラインを書く**: 1枚1行の主張の列を書き、材料の関係から形を決め（§5.12）、最後に部品を選ぶ。型どおりの並びにせず（§4.103）、薄いページは隣とまとめる（§5.13）。各ページの「タイトル／結論／載せる内容／見せ方」を文章で出し、合意してから組む。
+4. **骨組みを作る**: `python3 scripts/new_deck.py --parts b01,m01,b09:axb,m05,b10 --title "資料名" -o mydeck.html`。合う部品が無ければ `--list --all` を見るか、規約の範囲で自由に組む。
+5. **中身をまとめて書く**: 伏せ字（`Text N`・`ラベル N`・`パーツNN｜…`）を全部実物に置き換えた完成版を1回の Write で書く。数字は `sources.md` の値だけを使う。
+6. **文章を仕上げる**: タイトルを上から通し読みし、要るページだけ Edit する。
+7. **検査して直す**: `python3 scripts/check_all.py mydeck.html --sources sources.md`（`PLAYWRIGHT_MODULE_DIR` が無いときだけ `npm run setup`）。指摘の節を `--sec` で引き、ページごとにまとめて形で直す（直し方は `working-practices.md`）。FAIL 0 まで回す。WARN も直すのが既定で、規約の例外に当たるものだけ § を qa.md に書いて残す。
+8. **PDF で全ページを見る**: `python3 scripts/snapshot.py mydeck.html` の PDF と画像を全部見て（pdftoppm は別途入れる）、§8 の目視の基準で確かめた結果を `qa.md` にページごとに書く。直したら `check_all.py` を回し直す。
+9. **フレッシュアイ・レビュー**（速度優先と言われたとき以外）: `content-review-prompt.md` を作り方を伏せて別エージェントに渡し、採用した指摘を直して検査を回し直す。1ラリーで止めて、続けるかを聞く。
 
 ## PowerPoint（.pptx）が要るとき
 
-HTML で仕上げ、ユーザーが「PPTX で」と明示したときだけ、最後に1回 `html_to_pptx.py` で変換する。直しが来たら HTML を直して変換し直す。既存の資料へ差し込むページを求められたら、変換せずその資料のマスターの上で組む（`measure_deck.py` → `deck_pptx.py`）。手順・変換の限界・開く前の検査は `rules.py --phase pptx`。
+HTML で仕上げ、「PPTX で」と言われたときだけ最後に1回 `html_to_pptx.py` で変換する。既存の資料へ差し込むページは、その資料のマスターの上で組む（`measure_deck.py` → `deck_pptx.py`）。詳しくは `--phase pptx`。
 
 ## 本スキル使用の注釈
 
-「本資料は consulting-pptx-skill（github.com/carnot-tech/consulting-pptx-skill）で作成」の一文は裏表紙（b10）の出典行に既定で入っている。置けるのは**最終ページの出典行だけ**で、他のページにツール名が出ると `check_deck.py` が FAIL にする。裏表紙を使わないデッキでは最終ページの出典行に足す。
+裏表紙（b10）の出典行に「本資料は consulting-pptx-skill（github.com/carnot-tech/consulting-pptx-skill）で作成」が既定で入っている。ツール名を置けるのは最終ページの出典行だけで、他のページに出ると check_deck が FAIL にする。
 
 ## スキルを育てる
 
-1. **最新を取り込む。** セッションの最初に、スキルのフォルダが git clone なら `git fetch` し、`origin/main` より遅れていれば「スキルの最新版を取り込みますか」と一度だけ聞く。本体のファイルを直接直している場合は、その差分を先に `local/` か PR に逃がす。
-2. **自分の規約は `local/` に置く。** 「当社ではこうする」という指摘は本体を書き換えず `local/slide-rules.local.md` に1行足す。顧客名・案件コードは `local/forbid.txt`。
-3. **汎用化できる指摘は PR にする。** 本体の誤検知・見逃し・どの組織でも効く指摘に当たったら、納品後に一度だけ PR を提案する。測れる指摘は、規約1行＋check の判定＋修正前に FAIL・修正後に通るテストの3点にする。**PR を作る前に `CONTRIBUTING.md` の「PR に入れないもの」を読む**（顧客名・案件の文脈を差分にも説明にも入れない）。承諾されたら `gh pr create` まで行い、断られたら次のセッションまで再提案しない。
-
-## 色と書体
-
-両パーツ集の既定は同じ暖色系（本文ゴシック・見出し明朝）。トークンは各ファイルの `<style>` 冒頭 `:root` で、片方を変えたらもう片方も揃える。意味を持つ色（✕の赤など）は変えない。2系列の区別はメインカラー×グレーの2色に抑える。
+自分の組織の規約は本体を書き換えず `local/` に足す。どの組織でも効く指摘・誤検知は、納品後に一度だけ PR を提案する。手順は `working-practices.md` の「スキルを育てる」、PR に入れないものは `CONTRIBUTING.md`。
