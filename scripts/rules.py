@@ -31,7 +31,7 @@ DIGEST = REF / "rules-digest.md"
 # 工程 → 読む範囲。"§N" は節全体、"§4:見出しの一部" は §4 の小見出し単位、"head" は冒頭（用語・資料の種類の表）
 PHASES = {
     "plan": ["head", "§0", "§2", "§3", "§4:1枚に載せるもの", "§4:デッキ全体の構造", "§4:締め・相談", "§4:課題整理・事例"],
-    "build": ["§1", "§4:(冒頭)", "§4:左右2カラム", "§4:余白・塗り"],
+    "build": ["§1", "§4:(冒頭)", "§4:左右2カラム", "§4:余白・塗り", "§7:pre", "§7.24", "§7.25"],
     "chart": ["§5"],
     "table": ["§4:表と軸", "§6"],
     "process": ["§4:プロセス・図の型"],
@@ -90,13 +90,27 @@ def items(sec_lines):
     return res
 
 
+def preamble(sec_lines):
+    """節の前置き（見出しの次から、最初の番号つきの項・箇条・小見出しの手前まで）"""
+    out = []
+    for ln in sec_lines[1:]:
+        if re.match(r"^(\d+\. |- |### )", ln):
+            break
+        out.append(ln)
+    return out
+
+
 def pick(spec, head, secs):
     if spec == "head":
         return "\n".join(head)
     m = re.match(r"^§(\d+(?:\.\d+)?)(?::(.+))?$", spec)
     num, sub = m.group(1), m.group(2)
     if num not in secs:
-        return ""
+        # "§7.24" のように、節の中の1項だけを足す
+        sec, _, k = num.partition(".")
+        return "\n".join(items(secs.get(sec, [])).get(k, []))
+    if sub == "pre":
+        return "\n".join([secs[num][0]] + preamble(secs[num])).rstrip()
     if not sub:
         return "\n".join(secs[num])
     subs = subsections(secs[num])

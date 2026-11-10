@@ -963,6 +963,29 @@ class StructureF(unittest.TestCase):
         for ph in ("plan", "build", "chart", "table", "process", "text", "check"):
             self.assertIn(f"## {ph}", digest)
 
+    def test_digest_carries_rules_needed_while_building(self):
+        # 組む工程と文章の工程の要点版に、1塊1文・文末の句点・AIぽさの3要因が入っている。構成の工程にタイトルの折り返しが入っている
+        digest = (ROOT / "references" / "rules-digest.md").read_text(encoding="utf8")
+        part = {m.group(1): m.group(2) for m in re.finditer(r"^## (\w+)\n(.*?)(?=^## |\Z)", digest, re.S | re.M)}
+        for ph in ("build", "text"):
+            for ref in ("§7.24 ", "§7.25 ", "§7 冒頭 "):
+                self.assertIn(ref, part[ph], f"{ph} に {ref} が無い")
+        self.assertIn("§4.28 ", part["build"])
+        self.assertIn("§2.13 ", part["plan"])
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "rules.py"), "--phase", "build", "--full"], capture_output=True, text=True)
+        self.assertIn("AIぽさの3要因", r.stdout)
+        self.assertRegex(r.stdout, r"(?m)^24\. \*\*1つの文章塊")
+
+    def test_table_header_gap_reads_pt_and_px(self):
+        # §6: 見出しは本文より2以上（目安は3）大きく。th と td が同じ単位なら pt でも px でも比べる
+        for unit in ("pt", "px"):
+            css = f"<style>th{{font-size:12{unit}}} td{{font-size:11{unit}}}</style>"
+            self.assertTrue(any("表ヘッダー" in f and "§6" in f for f in run(inject("<style>", css + "<style>"))[1]), unit)
+            css = f"<style>th{{font-size:13.5{unit}}} td{{font-size:11{unit}}}</style>"
+            self.assertTrue(any("表ヘッダー" in w for w in warns(inject("<style>", css + "<style>"))), unit)
+        css = "<style>th{font-size:14.5pt} td{font-size:16px}</style>"
+        self.assertFalse(any("表ヘッダー" in f for f in run(inject("<style>", css + "<style>"))[1]))
+
     def test_sources_missing_number_warns(self):
         with tempfile.TemporaryDirectory() as d:
             src = Path(d) / "sources.md"

@@ -950,12 +950,15 @@ def check_html(path):
     if re.search(r'<span class="ac">', html):
         fail("タイトル内の色分け <span class=\"ac\"> が残っている")
     # 表ヘッダー
-    th = re.search(r"\bth\s*{[^}]*font-size\s*:\s*(\d+)px", html)
-    td = re.search(r"\btd\s*{[^}]*font-size\s*:\s*(\d+)px", html)
-    if th and td and int(th.group(1)) < int(td.group(1)) + 2:
-        fail(f"表ヘッダー {th.group(1)}px が本文 {td.group(1)}px +2pt 未満")
-    elif th and td and int(th.group(1)) < int(td.group(1)) + 3:
-        warn(f"表ヘッダー {th.group(1)}px は本文 {td.group(1)}px +3px 未満（§6: 見出しは本文より+3〜4pt 大きくするのが目安）")
+    # th と td を同じ単位（px どうし・pt どうし）で書いたときだけ比べる。しきい値は §8 の表
+    th = re.search(r"\bth\s*{[^}]*font-size\s*:\s*(\d+(?:\.\d+)?)(px|pt)", html)
+    td = re.search(r"\btd\s*{[^}]*font-size\s*:\s*(\d+(?:\.\d+)?)(px|pt)", html)
+    if th and td and th.group(2) == td.group(2):
+        u, gap = th.group(2), float(th.group(1)) - float(td.group(1))
+        if gap < 2:
+            fail(f"表ヘッダー {th.group(1)}{u} が本文 {td.group(1)}{u} +2{u} 未満（§6）")
+        elif gap < 3:
+            warn(f"表ヘッダー {th.group(1)}{u} は本文 {td.group(1)}{u} +3{u} 未満（§6: 見出しは本文より2pt以上、目安は+3pt）")
     if re.search(r"\bth\s*{[^}]*color\s*:\s*#?(9[0-9a-f]{5}|a[0-9a-f]{5}|b[0-9a-f]{5}|c[0-9a-f]{5}|888|999|aaa|bbb|ccc|gr[ae]y)\b", html, re.I):
         warn("表ヘッダーが薄グレー（§6: 見出しは本文と同じ濃色）")
     check_kicker_and_conclusion(html)
