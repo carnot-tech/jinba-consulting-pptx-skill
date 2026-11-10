@@ -8,7 +8,7 @@
 
 1. HTML で §8 の機械チェック FAIL 0・フレッシュアイ・レビュー（SKILL.md）まで済ませる
 2. 変換: `python3 scripts/html_to_pptx.py deck.html`（同じフォルダに deck.pptx。Node 22+・Chrome・python-pptx が必要）
-3. `check_deck.py deck.pptx` を FAIL 0 に。PowerPoint で開いて（または PDF に書き出して）文字の折り返しと重なりを目視する
+3. `check_deck.py deck.pptx` を FAIL 0 に。PowerPoint で開いて（または PDF に書き出して）文字の折り返しと重なりを目視する。別の形式に移した後は、全ページを画像にして元の HTML と並べて見比べる（三角・矢印・矢羽の形と向きが崩れやすい）。プレビューの表示だけで合格にしない
 4. 社外に送るなら、ファイルのプロパティ（作成者・会社名など）を消す
 5. 動画（`<video>`）は、元の mp4 が手元にあれば動画として埋め込み、描画された1コマを再生前の静止画にする（Web 上の動画は静止画になる）。変換後のファイルが 10MB を超えると html_to_pptx が WARN を出す。メールで送れないことが多いので、動画・画像を軽くするか、共有リンクで渡す
 
