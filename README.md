@@ -168,4 +168,8 @@ Made by [Carnot AI](https://jinba.io/ja?utm_source=github&utm_medium=readme&utm_
 
 ## License
 
-コード・文書は [MIT License](LICENSE) です。MIT License には商標を使う権利は含まれません。「Carnot」「Carnot AI」「Jinba」とロゴの扱いは [TRADEMARK.md](TRADEMARK.md)（事実としての言及・クレジット行・リンクは自由、製品名・ロゴ・公式を装う表現・改変版への商標使用は要許可）に従ってください。
+コード・文書は [PolyForm Noncommercial License 1.0.0](LICENSE) です。**個人の学習・研究・趣味、非営利の組織での利用は無償**です。**企業・団体・個人事業主が業務で使う場合（社内向けの資料作りを含む）は、商用ライセンスが必要です。** 導入を判断するための社内での評価は、30日まで無償で試せます。どの使い方が商用にあたるか、問い合わせ先は [LICENSING.md](LICENSING.md) にまとめています。
+
+ライセンスを変える前に公開した版（コミット `5e781b4` まで）は、その版に付いていた MIT License に従います。
+
+ライセンスには商標を使う権利は含まれません。「Carnot」「Carnot AI」「Jinba」とロゴの扱いは [TRADEMARK.md](TRADEMARK.md)（事実としての言及・クレジット行・リンクは自由、製品名・ロゴ・公式を装う表現・改変版への商標使用は要許可）に従ってください。
