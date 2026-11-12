@@ -958,6 +958,25 @@ class StructureF(unittest.TestCase):
         r = subprocess.run([sys.executable, str(ROOT / "scripts" / "build_digest.py"), "--check"], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
 
+    def test_digest_lead_keeps_decimals_and_parentheses(self):
+        # 頭の1文を切るとき、小数点（13.333）や括弧の中の句点で切らない
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import build_digest
+        self.assertEqual(build_digest.lead("13.333 × 7.5 in（EMU）"), "13.333 × 7.5 in（EMU）")
+        self.assertEqual(build_digest.lead("書体に従う（2書体まで。混在させない）。次の文。"), "書体に従う（2書体まで。混在させない）")
+        self.assertEqual(build_digest.lead("12. **頭の文。** 続き"), "頭の文")
+        digest = (ROOT / "references" / "rules-digest.md").read_text(encoding="utf8")
+        self.assertIn("13.333 × 7.5 in", digest)
+
+    def test_digest_leads_carry_conditions(self):
+        # 要点版だけを読んでも逆に動かないよう、条件つきの項は頭の1文に条件を持つ
+        digest = (ROOT / "references" / "rules-digest.md").read_text(encoding="utf8")
+        for needle in ("§2.20 ", "§4.12 内容が少ないページは、器・行・項目の間を引き伸ばさない",
+                       "§4.47 出典・注釈を置く資料では", "§4.10 行と列の両方に意味がある比較は",
+                       "§7.35 リード文（箱・カラムの冒頭に置く1行）を置くときは"):
+            self.assertIn(needle, digest)
+        self.assertNotIn("55%以上", digest)
+
     def test_digest_has_all_phases(self):
         digest = (ROOT / "references" / "rules-digest.md").read_text(encoding="utf8")
         for ph in ("plan", "build", "chart", "table", "process", "text", "check"):
