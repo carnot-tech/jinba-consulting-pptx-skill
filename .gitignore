@@ -10,7 +10,6 @@ package-lock.json
 *.potx
 *.skin.json
 skin.json
-!assets/*.pptx
 
 # Your organisation's own rules, templates and decks live in local/ (see local/README.md)
 local/*

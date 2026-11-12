@@ -7,7 +7,7 @@
   旧 SlideSpec パイプラインの 36型（表紙を除く35型）を、そのまま HTML パーツとして移植したもの。
   基本パーツ集 freeform_parts_16x9.html（表紙・全体マップ・矢羽・2カラム・軸のある表など）で足りないとき、
   ここから該当 section をコピーして使う。使用頻度は基本パーツ集より低い。
-  規約の正典: references/slide-rules.md（作成前に必読）／型の一覧と使いどころ: references/archetype-catalog.md
+  規約の正典: references/slide-rules.md（作成前に必読）／型の一覧: python3 scripts/new_deck.py --list --all
   ★ 各スライドの h1 は「そのパーツが何の型か」を表示しているだけ。実デッキでは主張文に差し替える（slide-rules §2.8）。
   配色・書体は <style> 冒頭の :root トークン（基本パーツ集と同じ warm 既定）。ネイビー系は .deck に skin-cool を付ける。
   納品前: check_deck.py で FAIL 0 → PDF化して全ページ目視。

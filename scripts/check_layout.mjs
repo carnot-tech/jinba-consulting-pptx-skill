@@ -550,7 +550,7 @@ const { issues, warns } = await page.evaluate(() => {
           }, emptyIn);
           if (emptyIn > 0.5 && fullest > 0.5) {
             warnOut.push(isBoxed(st)
-              ? `p${n}: 箱の中が ${Math.round(emptyIn * 100)}% 空いている「${(b.textContent || "").trim().slice(0, 16)}」（§4.54: 箱で囲っても空きは空き。箱を中身の高さにする・中身を足す・文字を一段大きくする）`
+              ? `p${n}: 箱の中が ${Math.round(emptyIn * 100)}% 空いている「${(b.textContent || "").trim().slice(0, 16)}」（§4.54: 箱で囲っても空きは空き。箱を中身の高さにする・文字を一段大きくする。中身を足すのは、材料があり主張に要るときだけ — §5.13）`
               : `p${n}: 縦の線で区切った列が伸び、中が ${Math.round(emptyIn * 100)}% 空いている「${(b.textContent || "").trim().slice(0, 16)}」（§4.12: 列は中身の高さにする。height:100%・stretch で伸ばさない）`);
             break;
           }
@@ -811,7 +811,7 @@ const { issues, warns } = await page.evaluate(() => {
             const one = items.filter((x) => x.n === 1), multi = items.filter((x) => x.n >= 2);
             if (one.length && multi.length) {
               hit = 1;
-              warnOut.push(`p${n}: 並べた見出し・数字のうち「${multi[0].txt.slice(0, 14)}」だけが ${multi[0].n} 行に折れている（ほかは1行。見出しを短くする・列を広げる・文字を一段小さくして全部を1行に揃える — §4.51）`);
+              warnOut.push(`p${n}: 並べた見出し・数字のうち「${multi[0].txt.slice(0, 14)}」だけが ${multi[0].n} 行に折れている（ほかは1行。見出しを短くする・列を広げる。文字を下げるなら、並べた全部を同じ大きさで下げる — §4.51）`);
               break;
             }
           }
@@ -904,7 +904,7 @@ const { issues, warns } = await page.evaluate(() => {
         }
         if (R > L && tr.width > 200) {
           const right = (tr.right - R) / tr.width, left = (L - tr.left) / tr.width;
-          if (right > 0.25) warnOut.push(`p${n}: 版面の右側 ${Math.round(right * 100)}% が空いている（§4.54: 列の幅を中身に合わせて配り直すか、内容を足す）`);
+          if (right > 0.25) warnOut.push(`p${n}: 版面の右側 ${Math.round(right * 100)}% が空いている（§4.54: 列の幅を中身に合わせて配り直す。内容を足すのは、材料があり主張に要るときだけ — §5.13）`);
           else if (left > 0.25) warnOut.push(`p${n}: 版面の左側 ${Math.round(left * 100)}% が空いている（§4.54）`);
         }
       }
