@@ -98,7 +98,7 @@ table.eq{table-layout:fixed}
 .chev .n{font-size:12pt;font-weight:700;color:var(--accent)}
 .chev .t{font-size:10.5pt;font-weight:700;margin:1mm 0 1.5mm 0;color:var(--navy)}
 .chev .x{font-size:9pt;line-height:1.55;color:var(--ink)}
-/* 2カラムは版面いっぱいに引き伸ばさない。表は自然な高さのまま、見出し＋表のブロックごと縦中央に置く（間延び防止。§5.13 は 55% を目安に、足りなければ行を足す） */
+/* 2カラムは版面いっぱいに引き伸ばさない。表は自然な高さのまま、見出し＋表のブロックごと縦中央に置く（間延び防止。空きの直し方は §5.13 の順） */
 .two{display:grid;grid-template-columns:1.5fr auto 1fr;gap:6mm;flex:0 1 auto;min-height:0;align-items:stretch}
 .c:has(>.two){justify-content:center}
 .two>div:first-child,.two>div:last-child{display:flex;flex-direction:column;min-height:0}

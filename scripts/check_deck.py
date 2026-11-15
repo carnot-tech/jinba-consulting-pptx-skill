@@ -4,7 +4,7 @@
 使い方:
   python3 check_deck.py out.pptx
   python3 check_deck.py deck.html
-  python3 check_deck.py assets/SuperTemplate_36type.pptx --template   # テンプレ集そのものを検査するとき
+  python3 check_deck.py templates/freeform_parts_16x9.html --template   # パーツ集そのものを検査するとき
   python3 check_deck.py deck.html --forbid ~/.config/deck-forbidden-terms.txt   # 顧客名・社内語の残りを FAIL
   python3 check_deck.py pages.pptx --house house.skin.json   # 既存の資料へ差し込むページ（slide-rules §8.7）
   python3 check_deck.py out.pptx --xml-only                  # PowerPoint が開けなくなる不正だけを見る
@@ -399,7 +399,7 @@ CLOSING_TITLE = re.compile(r"^(ご清聴)?ありがとうございました[。�
 
 
 def check_title(idx, title, explicit_break=False, closing=False, edge=False):
-    # explicit_break: 意味の切れ目で明示改行済み（§2.13）なら2行想定の WARN は出さない
+    # explicit_break: 泣き別れを避けるための明示改行（§2.13）があれば、2行になる旨の WARN は出さない
     # closing: 表紙・裏表紙・締めのあいさつだけのページ。語尾の検査から外す
     # edge: class に cover/chap/back が付いたページ。タイトルが無くてよい
     t = title.strip()
@@ -421,7 +421,7 @@ def check_title(idx, title, explicit_break=False, closing=False, edge=False):
     elif re.search(r"を(示す|説明する|紹介する)$|について(述べる|説明する)$", t):
         warn(f"p{idx}: タイトルが作業の説明で終わっている（「〜を示す」は何を見せるかの説明。見せた結果、何が言えるかを書く — §2.12）: 「{t}」")
     if not closing and re.search(r"(です|ます|でした|ました)[。．.]?$", t):
-        fail(f"p{idx}: タイトルがですます調 → 体言止めに: 「{t}」")
+        fail(f"p{idx}: タイトルがですます調 → 常体に（述語で終えてよい。§2.2）: 「{t}」")
     # タイトルは PPTX/HTML とも2行まで許容。1行目安(TITLE_MAX=40字)超は WARN、2行にも収まらない長さ(>80字)だけ FAIL。
     # 文字を縮小して1行に詰めるのは不可（slide-rules §2.1）。
     # 半角文字（英数・記号・空白）は全角の半分として数える（英語タイトルを日本語基準で FAIL にしない）
@@ -429,7 +429,7 @@ def check_title(idx, title, explicit_break=False, closing=False, edge=False):
     if tlen > TITLE_MAX * 2:
         fail(f"p{idx}: タイトル 全角換算{tlen:.0f}字（>{TITLE_MAX*2}・2行にも収まらない。主張を絞る）: 「{t}」")
     elif tlen > TITLE_MAX and not explicit_break:
-        warn(f"p{idx}: タイトル 全角換算{tlen:.0f}字（2行になる想定。意味の切れ目で改行・泣き別れなし・文字縮小で1行に詰めない）: 「{t}」")
+        warn(f"p{idx}: タイトル 全角換算{tlen:.0f}字（2行になる。折り返しは自動に任せ、泣き別れのときだけ <br> を入れる。文字縮小で1行に詰めない。2行で読めていれば残してよい — §2.1・§2.13）: 「{t}」")
     if re.match(r"^(Step|STEP|ステップ)\s*\d", t):
         fail(f"p{idx}: タイトルに Step 連結（タグチップで表現）: 「{t}」")
     if re.search(r"^(この|その|ここまで)", t):
@@ -566,7 +566,7 @@ def check_fill_ratio(idx, slide, title_shape):
             return
         cov = (max(bots) - min(tops)) / (bot_lim - top_lim)
         if cov < 0.55:
-            warn(f"p{idx}: 版面充填率 {cov*100:.0f}%（本文が版面の半分未満。情報を足すか型を変える。飾りで埋めない — slide-rules §5.13）")
+            warn(f"p{idx}: 版面充填率 {cov*100:.0f}%（本文が版面の半分程度。直し方は slide-rules §5.13 の順。検査を通すために中身を足さない・飾りで埋めない）")
     except Exception:
         return
 
@@ -874,7 +874,7 @@ def check_type_id(idx, text):
     """パーツの英語の型ID（「05 chart_insight」など）が右上のラベルや本文に残っていないか"""
     m = TYPE_ID.search(text) if TYPE_ID else None
     if m:
-        fail(f"p{idx}: パーツの型ID「{m.group(0)}」が残っている（右上のラベルはそのページの話題を日本語で書く。§4.13）")
+        fail(f"p{idx}: パーツの型ID「{m.group(0)}」が残っている（右上のラベルはそのページの話題を日本語で書く。§4.33）")
 
 
 def check_page_numbers(nums):
@@ -950,12 +950,15 @@ def check_html(path):
     if re.search(r'<span class="ac">', html):
         fail("タイトル内の色分け <span class=\"ac\"> が残っている")
     # 表ヘッダー
-    th = re.search(r"\bth\s*{[^}]*font-size\s*:\s*(\d+)px", html)
-    td = re.search(r"\btd\s*{[^}]*font-size\s*:\s*(\d+)px", html)
-    if th and td and int(th.group(1)) < int(td.group(1)) + 2:
-        fail(f"表ヘッダー {th.group(1)}px が本文 {td.group(1)}px +2pt 未満")
-    elif th and td and int(th.group(1)) < int(td.group(1)) + 3:
-        warn(f"表ヘッダー {th.group(1)}px は本文 {td.group(1)}px +3px 未満（§6: 見出しは本文より+3〜4pt 大きくするのが目安）")
+    # th と td を同じ単位（px どうし・pt どうし）で書いたときだけ比べる。しきい値は §8 の表
+    th = re.search(r"\bth\s*{[^}]*font-size\s*:\s*(\d+(?:\.\d+)?)(px|pt)", html)
+    td = re.search(r"\btd\s*{[^}]*font-size\s*:\s*(\d+(?:\.\d+)?)(px|pt)", html)
+    if th and td and th.group(2) == td.group(2):
+        u, gap = th.group(2), float(th.group(1)) - float(td.group(1))
+        if gap < 2:
+            fail(f"表ヘッダー {th.group(1)}{u} が本文 {td.group(1)}{u} +2{u} 未満（§6）")
+        elif gap < 3:
+            warn(f"表ヘッダー {th.group(1)}{u} は本文 {td.group(1)}{u} +3{u} 未満（§6: 見出しは本文より2pt以上、目安は+3pt）")
     if re.search(r"\bth\s*{[^}]*color\s*:\s*#?(9[0-9a-f]{5}|a[0-9a-f]{5}|b[0-9a-f]{5}|c[0-9a-f]{5}|888|999|aaa|bbb|ccc|gr[ae]y)\b", html, re.I):
         warn("表ヘッダーが薄グレー（§6: 見出しは本文と同じ濃色）")
     check_kicker_and_conclusion(html)

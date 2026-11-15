@@ -6,7 +6,7 @@ new_deck.py — 2つのパーツ集から必要なパーツだけを取り出し
 
   b01〜b30 = templates/freeform_parts_16x9.html（基本パーツ集）のパーツ番号
   m01〜m35 = templates/freeform_parts_more_16x9.html（追加パーツ集）のパーツ番号
-  番号は references/archetype-catalog.md と assets/SlideCatalog_16x9.pdf のページ順（基本 P.1〜30、追加 P.31〜65 → m01〜m35）
+  番号はパーツ集の中の並び順（Releases に添付した型カタログ PDF のページ順と同じ。基本 P.1〜30、追加 P.31〜65 → m01〜m35）
 
 出力は単体HTML。2つのパーツ集はCSSの設計が違う（基本＝.s / 追加＝.slide）ので、
 基本パーツ集の要素セレクタ（h1・table・th・td など）は .s 配下に、追加パーツ集の * / body は .slide 配下に
@@ -14,7 +14,7 @@ new_deck.py — 2つのパーツ集から必要なパーツだけを取り出し
 ページ番号（フッター）は並び順で振り直す。表紙（b01）・章扉（b04）・裏表紙（b10）は番号を振らない。
 
   --list   よく使う部品（規約を満たすことを確かめた20種類）の番号・型名・使いどころを表示して終了
-  --all    --list と一緒に付けると、残りの型も含めた62型すべてを表示する
+  --all    --list と一緒に付けると、残りの型も含めた65型すべてを表示する（★＝よく使う20種類）
   --show b09,m05   指定した部品の HTML（section だけ）を表示して終了。パーツ集の原本は開かない
 """
 import argparse, pathlib, re, sys, unicodedata
@@ -153,6 +153,15 @@ CORE = [
 ]
 
 
+# --all で名前だけでは使いどころが分からない型の補足
+NOTES = {
+    "b28": "縦＝担い手・横＝業務の流れに課題・適用例を番号で重ね、右に一覧",
+    "b29": "上段＝利用者から見た流れ、下段＝裏側の処理を縦に対応。指示の前後の比較にも使う",
+    "b30": "質問は相手の言葉のまま、回答と区切り線で分ける",
+    "m22": "状況・課題・対策の3段。列の見出しは中身の言葉にする（§7.32）",
+}
+
+
 VARIANTS = {"axb"}  # 部品の変形（b09:axb＝軸ボックスの表）
 
 
@@ -202,10 +211,13 @@ def main():
         return
 
     if a.list or not a.parts:
-        for i, nm in enumerate(part_names(base_html, "s"), 1):
-            print(f"b{i:02d}  {nm}")
-        for i, nm in enumerate(part_names(more_html, "slide"), 1):
-            print(f"m{i:02d}  {nm}")
+        core = {pid.split(":")[0] for pid, _, _ in CORE if pid}
+        for pre, html, cls in (("b", base_html, "s"), ("m", more_html, "slide")):
+            for i, nm in enumerate(part_names(html, cls), 1):
+                pid = f"{pre}{i:02d}"
+                mark = "★" if pid in core else "  "
+                note = f"：{NOTES[pid]}" if pid in NOTES else ""
+                print(f"{mark}{pid}  {nm}{note}")
         return
 
     picked = []

@@ -934,10 +934,76 @@ class StructureF(unittest.TestCase):
         r = subprocess.run([sys.executable, str(ROOT / "scripts" / "rules.py"), "--sec", *refs], capture_output=True, text=True)
         self.assertNotIn("見つからない", r.stderr, r.stderr)
 
+    def test_merged_rule_forwards_to_target(self):
+        # 統合した番号（§4.104 → §4.51）を引くと、統合先の本文も出る
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "rules.py"), "--sec", "4.104"], capture_output=True, text=True)
+        self.assertIn("§4.51（統合先）", r.stdout)
+        self.assertIn("縦の揃え方", r.stdout)
+
+    def test_merge_targets_exist_and_are_not_stubs(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import rules
+        _, secs = rules.load()
+        for n, lines in secs.items():
+            for k, v in rules.items(lines).items():
+                m = re.search(r"（§(\d+)\.(\d+) に統合", v[0])
+                if not m:
+                    continue
+                to = rules.items(secs[m.group(1)]).get(m.group(2))
+                self.assertTrue(to, f"§{n}.{k} の統合先 §{m.group(1)}.{m.group(2)} が無い")
+                self.assertNotIn("に統合", to[0], f"§{n}.{k} の統合先がさらに統合されている")
+
+    def test_digest_is_built_from_canon(self):
+        # 要点版は build_digest.py が規約から作る。規約を直して作り直し忘れたら FAIL
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "build_digest.py"), "--check"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_digest_lead_keeps_decimals_and_parentheses(self):
+        # 頭の1文を切るとき、小数点（13.333）や括弧の中の句点で切らない
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import build_digest
+        self.assertEqual(build_digest.lead("13.333 × 7.5 in（EMU）"), "13.333 × 7.5 in（EMU）")
+        self.assertEqual(build_digest.lead("書体に従う（2書体まで。混在させない）。次の文。"), "書体に従う（2書体まで。混在させない）")
+        self.assertEqual(build_digest.lead("12. **頭の文。** 続き"), "頭の文")
+        digest = (ROOT / "references" / "rules-digest.md").read_text(encoding="utf8")
+        self.assertIn("13.333 × 7.5 in", digest)
+
+    def test_digest_leads_carry_conditions(self):
+        # 要点版だけを読んでも逆に動かないよう、条件つきの項は頭の1文に条件を持つ
+        digest = (ROOT / "references" / "rules-digest.md").read_text(encoding="utf8")
+        for needle in ("§2.20 ", "§4.12 内容が少ないページは、器・行・項目の間を引き伸ばさない",
+                       "§4.47 出典・注釈を置く資料では", "§4.10 行と列の両方に意味がある比較は",
+                       "§7.35 リード文（箱・カラムの冒頭に置く1行）を置くときは"):
+            self.assertIn(needle, digest)
+        self.assertNotIn("55%以上", digest)
+
     def test_digest_has_all_phases(self):
         digest = (ROOT / "references" / "rules-digest.md").read_text(encoding="utf8")
         for ph in ("plan", "build", "chart", "table", "process", "text", "check"):
             self.assertIn(f"## {ph}", digest)
+
+    def test_digest_carries_rules_needed_while_building(self):
+        # 組む工程と文章の工程の要点版に、1塊1文・文末の句点・AIぽさの3要因が入っている。構成の工程にタイトルの折り返しが入っている
+        digest = (ROOT / "references" / "rules-digest.md").read_text(encoding="utf8")
+        part = {m.group(1): m.group(2) for m in re.finditer(r"^## (\w+)\n(.*?)(?=^## |\Z)", digest, re.S | re.M)}
+        for ph in ("build", "text"):
+            for ref in ("§7.24 ", "§7.25 ", "§7 冒頭 "):
+                self.assertIn(ref, part[ph], f"{ph} に {ref} が無い")
+        self.assertIn("§4.28 ", part["build"])
+        self.assertIn("§2.13 ", part["plan"])
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "rules.py"), "--phase", "build", "--full"], capture_output=True, text=True)
+        self.assertIn("AIぽさの3要因", r.stdout)
+        self.assertRegex(r.stdout, r"(?m)^24\. \*\*1つの文章塊")
+
+    def test_table_header_gap_reads_pt_and_px(self):
+        # §6: 見出しは本文より2以上（目安は3）大きく。th と td が同じ単位なら pt でも px でも比べる
+        for unit in ("pt", "px"):
+            css = f"<style>th{{font-size:12{unit}}} td{{font-size:11{unit}}}</style>"
+            self.assertTrue(any("表ヘッダー" in f and "§6" in f for f in run(inject("<style>", css + "<style>"))[1]), unit)
+            css = f"<style>th{{font-size:13.5{unit}}} td{{font-size:11{unit}}}</style>"
+            self.assertTrue(any("表ヘッダー" in w for w in warns(inject("<style>", css + "<style>"))), unit)
+        css = "<style>th{font-size:14.5pt} td{font-size:16px}</style>"
+        self.assertFalse(any("表ヘッダー" in f for f in run(inject("<style>", css + "<style>"))[1]))
 
     def test_sources_missing_number_warns(self):
         with tempfile.TemporaryDirectory() as d:

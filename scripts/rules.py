@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""rules.py — 規約の正典 references/slide-rules.md から、いまの工程に要る節だけを取り出して表示する。
+"""rules.py — 規約の正典 references/slide-rules.md（と、そこから分けた pptx.md・pitch.md）から、いまの工程に要る節だけを取り出して表示する。
 
 規約は1つのファイル（正本）のまま。全文を最初に読み込む代わりに、工程ごとにこのスクリプトで引く。
 --phase の既定は要点版（references/rules-digest.md の該当工程。数千字）。節全体が要るときだけ --full を付ける。
@@ -14,7 +14,7 @@
   python3 scripts/rules.py --phase check       # 検査と直し（§8）
   python3 scripts/rules.py --phase pptx        # PPTX にする・既存の PPTX に差し込む（§8.6・§8.7）
   python3 scripts/rules.py --phase pitch       # 登壇用のピッチ（§9）
-  python3 scripts/rules.py --sec 4.12 5.26     # 検査の指摘に出た項だけを引く
+  python3 scripts/rules.py --sec 4.12 5.26     # 検査の指摘に出た項だけを引く（統合した番号は統合先も出す）
   python3 scripts/rules.py --phases            # 工程と節の対応表
 """
 import argparse
@@ -22,13 +22,16 @@ import re
 import sys
 from pathlib import Path
 
-RULES = Path(__file__).resolve().parent.parent / "references" / "slide-rules.md"
-DIGEST = Path(__file__).resolve().parent.parent / "references" / "rules-digest.md"
+REF = Path(__file__).resolve().parent.parent / "references"
+RULES = REF / "slide-rules.md"
+# §8.6・§8.7 と §9 は別ファイルに分けてある。節番号はそのまま引ける
+PARTS = [RULES, REF / "pptx.md", REF / "pitch.md"]
+DIGEST = REF / "rules-digest.md"
 
 # 工程 → 読む範囲。"§N" は節全体、"§4:見出しの一部" は §4 の小見出し単位、"head" は冒頭（用語・資料の種類の表）
 PHASES = {
     "plan": ["head", "§0", "§2", "§3", "§4:1枚に載せるもの", "§4:デッキ全体の構造", "§4:締め・相談", "§4:課題整理・事例"],
-    "build": ["§1", "§4:(冒頭)", "§4:左右2カラム", "§4:余白・塗り"],
+    "build": ["§1", "§4:(冒頭)", "§4:左右2カラム", "§4:余白・塗り", "§7:pre", "§7.24", "§7.25"],
     "chart": ["§5"],
     "table": ["§4:表と軸", "§6"],
     "process": ["§4:プロセス・図の型"],
@@ -40,7 +43,14 @@ PHASES = {
 
 
 def load():
-    lines = RULES.read_text(encoding="utf8").split("\n")
+    lines = []
+    for f in PARTS:
+        if f.exists():
+            # 2つ目以降のファイルの「# 見出し」と前置きは読み飛ばし、## の節だけを取る
+            body = f.read_text(encoding="utf8").split("\n")
+            if f is not RULES:
+                body = body[next((i for i, ln in enumerate(body) if ln.startswith("## ")), len(body)):]
+            lines += body
     head, secs, cur = [], {}, None
     for ln in lines:
         m = re.match(r"^## (\d+(?:\.\d+)?)\.?\s", ln)
@@ -80,13 +90,27 @@ def items(sec_lines):
     return res
 
 
+def preamble(sec_lines):
+    """節の前置き（見出しの次から、最初の番号つきの項・箇条・小見出しの手前まで）"""
+    out = []
+    for ln in sec_lines[1:]:
+        if re.match(r"^(\d+\. |- |### )", ln):
+            break
+        out.append(ln)
+    return out
+
+
 def pick(spec, head, secs):
     if spec == "head":
         return "\n".join(head)
     m = re.match(r"^§(\d+(?:\.\d+)?)(?::(.+))?$", spec)
     num, sub = m.group(1), m.group(2)
     if num not in secs:
-        return ""
+        # "§7.24" のように、節の中の1項だけを足す
+        sec, _, k = num.partition(".")
+        return "\n".join(items(secs.get(sec, [])).get(k, []))
+    if sub == "pre":
+        return "\n".join([secs[num][0]] + preamble(secs[num])).rstrip()
     if not sub:
         return "\n".join(secs[num])
     subs = subsections(secs[num])
@@ -138,6 +162,12 @@ def main():
             print(f"見つからない: §{s}", file=sys.stderr)
             continue
         out.append(f"§{s}\n" + "\n".join(it))
+        # 統合した項は「（§4.51 に統合）」の1行だけを残してある。統合先も続けて出す
+        fw = re.search(r"（§(\d+)\.(\d+) に統合", it[0])
+        if fw:
+            to = items(secs[fw.group(1)]).get(fw.group(2))
+            if to:
+                out.append(f"§{fw.group(1)}.{fw.group(2)}（統合先）\n" + "\n".join(to))
     print("\n\n".join(x for x in out if x.strip()))
 
 

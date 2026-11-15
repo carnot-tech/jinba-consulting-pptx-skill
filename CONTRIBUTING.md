@@ -18,6 +18,8 @@
 2. `scripts/check_deck.py`／`scripts/check_layout.mjs` に判定を足す
 3. `tests/` に「直していない版で FAIL が出る」「直した版で出ない」の 2 件を足す
 
+規約を直したら `python3 scripts/build_digest.py` で要点版 `references/rules-digest.md` を作り直す（手で直さない。作り直し忘れはテストが FAIL にする）。検査のしきい値を変えたら、§8 の「検査のしきい値」の表も同じ PR で直す。
+
 測れない指摘（言い回し・論理）は規約の 1 行だけでよい。その場合は PR に「測れない理由」を 1 行書く。
 
 ### スクリプト（scripts/）を直す
@@ -28,7 +30,7 @@
 ### パーツ集・型カタログを直す
 
 - 色・書体は両パーツ集（`templates/freeform_parts_16x9.html`・`freeform_parts_more_16x9.html`）の `:root` を揃える
-- 型を足した・見た目を変えたときは `references/archetype-catalog.md` も更新する。`assets/SlideCatalog_16x9.pdf` の再生成が要る場合は PR にそう書く
+- 型を足した・名前を変えたときは、パーツ集の `<!-- ═══ パーツNN: 名前 -->` のコメントを直す（`new_deck.py --list --all` はここから名前を読む）。Releases の型カタログ PDF の作り直しが要る場合は PR にそう書く
 
 ### 文書
 
