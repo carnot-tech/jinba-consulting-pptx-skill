@@ -650,6 +650,53 @@ class ColumnVerticalAlignment(unittest.TestCase):
         self.assertEqual(len(pages), 2, out)
 
 
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class ColumnOneSideEmpty(unittest.TestCase):
+    """check_layout：左右2列の片方の列だけが縦に大きく空く（§4.26・§4.54。45%超で WARN・55%超で FAIL）"""
+
+    layout = LayoutFeedback20261012.layout  # 検査の呼び方だけを借りる（継承すると親のテストが二重に走る）
+
+    HEAD = '<div style="height:38px;border-bottom:1.8px solid #333;font-weight:700">{}</div>'
+    FIG = HEAD.format("申請から承認までの日数") + '<svg width="100%" height="320"><rect width="100%" height="320" fill="#C5A681"/></svg>'
+    CENTER = "display:flex;flex-direction:column;justify-content:center;flex:1"
+    MSG = "の列だけ縦の"
+
+    def page(self, right, right_style=CENTER):
+        return ('<div style="display:grid;grid-template-columns:2fr 1fr;gap:24px">'
+                f'<div>{self.FIG}</div>'
+                f'<div style="display:flex;flex-direction:column">{self.HEAD.format("結果")}'
+                f'<div style="{right_style}">{right}</div></div></div>')
+
+    @staticmethod
+    def bullets(k, size=15):
+        items = ["承認待ちの時間を当日中に縮める", "差し戻しの理由を入力時に示す", "月末の集中を週ごとに分ける",
+                 "金額の小さい申請は承認を省く", "承認者を部ごとに2人置く", "差し戻しの件数を月ごとに見る",
+                 "入力の誤りを申請時に止める", "承認の期限を画面に出す"]
+        return "".join(f'<p style="margin:0 0 10px;font-size:{size}px">{t}</p>' for t in items[:k])
+
+    def test_short_text_centered_next_to_figure_fails(self):
+        # §4.26 で縦中央に寄せてよい「図の横の説明」でも、空きの量は数える
+        out = self.layout(self.page(self.bullets(2)))
+        self.assertTrue(any(self.MSG in l and l.startswith("FAIL") for l in out), out)
+
+    def test_short_text_top_aligned_next_to_figure_fails(self):
+        out = self.layout(self.page(self.bullets(2), ""))
+        self.assertTrue(any(self.MSG in l and l.startswith("FAIL") for l in out), out)
+
+    def test_text_filling_the_column_passes(self):
+        # 直した版: 右の文字を一段大きくし、列の縦を中身で埋める
+        out = self.layout(self.page(self.bullets(8, 17)))
+        self.assertFalse(any(self.MSG in l for l in out), out)
+
+    def test_three_parallel_columns_are_not_checked(self):
+        # 3列以上の並列の項目は、短い列が空くのが自然なので数えない
+        col = '<div><p style="margin:0">{}</p></div>'
+        body = ('<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:24px">'
+                f'<div>{self.FIG}</div>' + col.format("承認待ちを縮める") * 2 + '</div>')
+        out = self.layout(body)
+        self.assertFalse(any(self.MSG in l for l in out), out)
+
+
 class BotFeedback20261019(unittest.TestCase):
     """check_deck：文字化け（FAIL）・ページ番号の連番（FAIL）・1項目だけの箇条・本文のですます・締めのページ・keep-all・番号つき項目名（WARN）"""
 
