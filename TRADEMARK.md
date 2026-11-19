@@ -1,10 +1,10 @@
 # 商標ポリシー（Trademark Policy）
 
-最終更新: 2026-10-07
+最終更新: 2026-11-05
 
-このリポジトリのコード・文書は [MIT License](LICENSE) で提供しています。**MIT License はソフトウェアの利用・改変・再配布を許すものであり、商標を使う権利は含みません。** このポリシーは、Carnot AI Inc.（以下「当社」）の商標を、どこまで許可なく使えるか、どこから許可が要るかを定めるものです。
+このリポジトリのコード・文書は [PolyForm Noncommercial License 1.0.0](LICENSE) で提供しています（商用の利用は [LICENSING.md](LICENSING.md) の商用ライセンス）。**ライセンスはソフトウェアの利用・改変・再配布の条件を定めるものであり、商標を使う権利は含みません。** このポリシーは、Carnot AI Inc.（以下「当社」）の商標を、どこまで許可なく使えるか、どこから許可が要るかを定めるものです。
 
-> English summary: The code is MIT-licensed, but the MIT License grants no trademark rights. "Carnot", "Carnot AI", "Jinba" and the associated logos are trademarks of Carnot AI Inc. (whether or not registered). You may refer to them truthfully (for example, "built with Carnot AI's consulting-pptx-skill"). You may not use them as the name of your own product, service, company, domain or account, use the logos, or suggest that your work is official, endorsed by or affiliated with Carnot AI without written permission. Forks and modified versions must use a different name. Contact: see the end of this document.
+> English summary: The code is licensed under the PolyForm Noncommercial License 1.0.0 (commercial use requires a commercial license, see LICENSING.md). Neither license grants trademark rights. "Carnot", "Carnot AI", "Jinba" and the associated logos are trademarks of Carnot AI Inc. (whether or not registered). You may refer to them truthfully (for example, "built with Carnot AI's consulting-pptx-skill"). You may not use them as the name of your own product, service, company, domain or account, use the logos, or suggest that your work is official, endorsed by or affiliated with Carnot AI without written permission. Forks and modified versions must use a different name. Contact: see the end of this document.
 
 ## 1. 対象となる商標
 
@@ -33,14 +33,14 @@
 - 当社の**ロゴ**を使うこと（ウェブサイト・資料・製品・グッズを問わない）
 - 当社の**公式・提携・推奨・認定**であるかのように見せる表現（「Carnot AI 公式」「Jinba 認定」「Carnot AI と共同開発」など、事実でないもの）
 - 本スキルの**改変版・派生物**を、「Jinba」「Carnot」「Carnot AI」を含む名称で配布・販売・提供すること
-- 当社の商標を含む名称で、本スキルを使った**有料サービス・研修・コンサルティング**を提供すること（本スキルを使って業務を行うこと自体は MIT License の範囲で自由です。制限されるのは商標を名称に使うことです）
+- 当社の商標を含む名称で、本スキルを使った**有料サービス・研修・コンサルティング**を提供すること（本スキルを業務で使うこと自体の条件は [LICENSING.md](LICENSING.md) に従います。本ポリシーが制限するのは商標を名称に使うことです）
 - 当社の商標を、本スキルや当社と無関係な商品・サービスの宣伝に使うこと
 
 ## 4. フォーク・改変版・再配布
 
 - フォークや改変版を公開するときは、**当社の商標を含まない名称**を付けてください。リポジトリ名・パッケージ名・配布物の名称に「Jinba」「Carnot」を入れないでください
 - 出所の明記（「carnot-tech/consulting-pptx-skill をもとに改変」）は歓迎します。ただし、当社がその改変版を作った・保証した・推奨したと読める書き方は避けてください
-- 改変版に当社のロゴ・ブランド資産（`assets/` のロゴ画像など、あれば）を含めないでください。改変していない本リポジトリそのものの再配布は MIT License のとおり可能です
+- 改変版に当社のロゴ・ブランド資産（`assets/` のロゴ画像など、あれば）を含めないでください。改変していない本リポジトリそのものの再配布は、ライセンス（[LICENSE](LICENSE)・[LICENSING.md](LICENSING.md)）の範囲で可能です
 - 改変版の不具合や内容について、当社は責任を負いません。問い合わせ先が当社に見えないようにしてください
 
 ## 5. 表記の作法
@@ -53,7 +53,7 @@
 ## 6. スキルで作った資料について
 
 - **利用者が本スキルで作った資料（スライド・PDF・PPTX）は利用者のものです。** 当社は資料の内容について権利を主張せず、責任も負いません
-- 裏表紙のクレジット行は、当社への帰属表示として残していただけると助かりますが、**義務ではありません**。削除しても MIT License にも本ポリシーにも反しません
+- 裏表紙のクレジット行は、当社への帰属表示として残していただけると助かりますが、**義務ではありません**。削除してもライセンスにも本ポリシーにも反しません
 - クレジット行を残す場合は、文言を変えずに最終ページの出典行に置いてください（スキルの機械チェックが、それ以外のページにツール名があると FAIL にします）
 - 資料の作成者・発行者として当社の名称を表示しないでください。資料の作成者は利用者です
 
@@ -61,7 +61,7 @@
 
 - 本ポリシーに反する使い方を見つけた場合、当社はまず連絡し、名称変更や表示の修正を求めます。応じていただけない場合は、商標法その他の法令にもとづく措置をとることがあります
 - 本ポリシーは予告なく更新することがあります。最新版は本リポジトリの `TRADEMARK.md` です。更新前に許可した使い方は、更新後も原則として有効です
-- 本ポリシーは商標についての定めであり、MIT License の条件を変更・制限するものではありません。両者が重なる場合、コードの利用は MIT License、商標の使用は本ポリシーに従います
+- 本ポリシーは商標についての定めであり、ライセンスの条件を変更・制限するものではありません。両者が重なる場合、コードの利用はライセンス（[LICENSE](LICENSE)・[LICENSING.md](LICENSING.md)）、商標の使用は本ポリシーに従います
 
 ## 8. 問い合わせ
 
