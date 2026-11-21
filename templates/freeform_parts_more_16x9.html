@@ -2814,6 +2814,36 @@ body {
   display: none;
 }
 
+/* 右に添える「解の方向性」（§4.88）。ツリーの線では結ばず、2段目の枝ごとに行の区切りの線と箇条で置く。
+   枝の中に置くので、枝の高さが変わっても行がずれない */
+.ltree-head {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  column-gap: 28px;
+  font-weight: 700;
+  font-size: 15px;
+  padding-bottom: 6px;
+  margin-bottom: 14px;
+  border-bottom: 1.8px solid var(--ink);
+}
+.ltree-ans {
+  flex: 0 0 300px;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin-left: 28px;
+  padding: 6px 0;
+  font-size: 14px;
+}
+.ltree-ans ul { margin: 0; padding-left: 1.1em; }
+.ltree-ans li + li { margin-top: 4px; }
+.ltree-children > .ltree-node + .ltree-node > .ltree-ans {
+  border-top: 1px solid var(--hairline);
+  margin-top: -5px;
+  padding-top: 11px;
+}
+
 /* Single mapping marker centered in the gutter. */
 .ism-mark {
   position: absolute;
@@ -3335,7 +3365,7 @@ body.external section.internal{display:none!important}
     <div class="kicker">25  issue_tree</div>
     <h1 class="title">イシューツリー</h1>
     <div class="rule"></div>
-    <div class="content"><div class="ltree"><div class="ltree-node"><div class="ltree-box ltree-l1 has-children">分解したいイシュー</div><div class="ltree-children"><div class="ltree-node"><div class="ltree-box ltree-l2 has-children">サブイシュー1</div><div class="ltree-children"><div class="ltree-node"><div class="ltree-box ltree-l3">論点1-1</div></div><div class="ltree-node"><div class="ltree-box ltree-l3">論点1-2</div></div></div></div><div class="ltree-node"><div class="ltree-box ltree-l2 has-children">サブイシュー2</div><div class="ltree-children"><div class="ltree-node"><div class="ltree-box ltree-l3">論点2-1</div></div><div class="ltree-node"><div class="ltree-box ltree-l3">論点2-2</div></div></div></div><div class="ltree-node"><div class="ltree-box ltree-l2 has-children">サブイシュー3</div><div class="ltree-children"><div class="ltree-node"><div class="ltree-box ltree-l3">論点3-1</div></div><div class="ltree-node"><div class="ltree-box ltree-l3">論点3-2</div></div></div></div></div></div></div></div>
+    <div class="content"><div class="ltree-head"><span>問いの分解</span><span>解の方向性</span></div><div class="ltree"><div class="ltree-node"><div class="ltree-box ltree-l1 has-children">どう〜していくか</div><div class="ltree-children"><div class="ltree-node"><div class="ltree-box ltree-l2 has-children">問い 1（〜か）</div><div class="ltree-children"><div class="ltree-node"><div class="ltree-box ltree-l3">問い 1-1（〜か）</div></div><div class="ltree-node"><div class="ltree-box ltree-l3">問い 1-2（〜か）</div></div></div><div class="ltree-ans"><ul><li>Text 1</li><li>Text 2</li></ul></div></div><div class="ltree-node"><div class="ltree-box ltree-l2 has-children">問い 2（〜か）</div><div class="ltree-children"><div class="ltree-node"><div class="ltree-box ltree-l3">問い 2-1（〜か）</div></div><div class="ltree-node"><div class="ltree-box ltree-l3">問い 2-2（〜か）</div></div></div><div class="ltree-ans"><ul><li>Text 3</li><li>Text 4</li></ul></div></div><div class="ltree-node"><div class="ltree-box ltree-l2 has-children">問い 3（〜か）</div><div class="ltree-children"><div class="ltree-node"><div class="ltree-box ltree-l3">問い 3-1（〜か）</div></div><div class="ltree-node"><div class="ltree-box ltree-l3">問い 3-2（〜か）</div></div></div><div class="ltree-ans"><ul><li>Text 5</li><li>Text 6</li></ul></div></div></div></div></div></div>
     <footer class="footer"><span class="source">出典：Source 1</span><span>26</span></footer>
   </div>
 </section>
