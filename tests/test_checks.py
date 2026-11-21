@@ -1838,3 +1838,48 @@ class PptxAppendixAndAxisNames(unittest.TestCase):
     def test_named_corner_passes(self):
         fails = self._check(self._deck(("部門ごとに承認待ちの日数を比べる", None, (True, True, self.ROWS))))
         self.assertFalse(any("§4.102" in f for f in fails), fails)
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class TitleLinesAndBandIndent(unittest.TestCase):
+    """check_layout：タイトルは2行まで（§2.1 FAIL）／塗りの帯の行も文字の左端を揃える（§4.63 WARN）"""
+
+    def layout_page(self, title, body):
+        page = (f'<section class="s"><h1>{title}</h1>{body}'
+                f'<div class="foot"><span>9</span></div></section>')
+        html = GOOD.replace("</body>", page + "</body>", 1)
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "deck.html"
+            p.write_text(html, encoding="utf8")
+            r = subprocess.run(["node", str(ROOT / "scripts" / "check_layout.mjs"), str(p), "--all"],
+                               capture_output=True, text=True, cwd=ROOT, encoding="utf8")
+        return r.stdout.splitlines()
+
+    BODY = '<p style="margin:0">承認待ちの時間を当日中に縮める</p>'
+    SHORT = "承認までの日数を3日から当日に縮める"
+
+    def test_three_line_title_fails(self):
+        long = "承認までの日数を3日から当日に縮めるために、申請の入力時に差し戻しの理由を示し、" * 3
+        out = self.layout_page(long, self.BODY)
+        self.assertTrue(any(l.startswith("FAIL") and "行に折り返している" in l for l in out), out)
+
+    def test_two_line_title_passes(self):
+        out = self.layout_page(self.SHORT + "<br>差し戻しの理由は入力時に示す", self.BODY)
+        self.assertFalse(any("行に折り返している" in l for l in out), out)
+
+    def table(self, band_left_pad):
+        rows = []
+        for i in range(4):
+            band = ' style="background:#eee"' if i == 1 else ""
+            pad = band_left_pad if i == 1 else 8
+            rows.append(f'<tr{band}><td style="padding:6px 8px 6px {pad}px">項目{i}の説明</td>'
+                        f'<td style="padding:6px 8px">{i}件</td></tr>')
+        return f'<table style="border-collapse:collapse;width:600px"><tbody>{"".join(rows)}</tbody></table>'
+
+    def test_indented_band_row_warns(self):
+        out = self.layout_page(self.SHORT, self.table(24))
+        self.assertTrue(any("塗りの帯を付けた行だけ" in l for l in out), out)
+
+    def test_band_row_with_same_padding_passes(self):
+        out = self.layout_page(self.SHORT, self.table(8))
+        self.assertFalse(any("塗りの帯を付けた行だけ" in l for l in out), out)
