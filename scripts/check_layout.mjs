@@ -33,6 +33,7 @@
 //  31. 左右2列に並べたとき、片方の列だけが上詰めで、もう片方は中身が下がって始まる（縦の揃え方の不一致。WARN。§4.104）
 //  33. タイトルが3行以上に折り返す（FAIL。§2.1。表紙・章扉・裏表紙・定型ページは対象外）
 //  34. 表の行に塗りの帯を付けた行だけ、文字の左端が他の行よりずれている（帯の中の字下げ。WARN。§4.63）
+//  35. 左の列から右の列への関係を示す三角・矢印を、行ごとに繰り返している（WARN。§6。行頭の箇条の記号・上から下へ進む図の ▼・文字を入れた矢羽は対象外）
 //   4 の補足: 版面の30%超が空いているときは WARN（40%超は FAIL）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
 // 使い方: node scripts/check_layout.mjs deck.html [--all]   （--all で指摘を全件表示。既定は FAIL・WARN 各20件まで。playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
@@ -169,6 +170,63 @@ const { issues, warns } = await page.evaluate(() => {
           }
         }
       }
+    }
+    // 35. 列の間の関係を示す三角・矢印の繰り返し（§6: 見出しの行の区切りの位置に1つだけ置く。行ごとに置かない）
+    // 拾うのは、右向きの矢印の字1つだけの要素と、CSS で描いた右向きの三角。左右の両側に文字のある要素が並ぶものに限る
+    // （行頭の箇条の記号、上から下へ進む図の ▼、文の途中の矢印、文字を入れた矢羽は対象外）
+    if (!std && !s.matches(".cover, .chap, .back")) {
+      const ARROW = /^[▶▸►▷▹→⇒➡➔➜➤⟶]$/;
+      const clear = (c) => c === "transparent" || /rgba\([^)]*,\s*0\)$/.test(c);
+      const hasText = (el) => (el.textContent || "").trim().length > 0;
+      // el か、その2つ上までの親の兄弟に、記号と同じ高さで左（dir=-1）・右（dir=1）に並ぶ文字の要素があるか
+      const beside = (el, r, dir) => {
+        let cur = el;
+        for (let up = 0; up < 3 && cur && cur !== s; up++, cur = cur.parentElement) {
+          for (let sib = dir < 0 ? cur.previousElementSibling : cur.nextElementSibling; sib; sib = dir < 0 ? sib.previousElementSibling : sib.nextElementSibling) {
+            if (!hasText(sib) || (foot && foot.contains(sib))) continue;
+            const q = sib.getBoundingClientRect();
+            if (q.width < 1 || q.height < 1) continue;
+            if (Math.min(q.bottom, r.bottom) - Math.max(q.top, r.top) <= 0) continue;
+            if (dir < 0 ? q.right <= r.left + 2 : q.left >= r.right - 2) return true;
+          }
+        }
+        return false;
+      };
+      const marks = [];
+      for (const el of s.querySelectorAll("*")) {
+        if (el.children.length || el.closest("svg") || (foot && foot.contains(el))) continue;
+        const st = getComputedStyle(el);
+        if (st.display === "none" || st.visibility === "hidden") continue;
+        const txt = (el.textContent || "").trim();
+        let r = null;
+        if (ARROW.test(txt)) {
+          r = ownTextRects(el)[0] || null;
+        } else if (!txt) {
+          const tri = parseFloat(st.borderLeftWidth) > 2 && parseFloat(st.borderTopWidth) > 1 && parseFloat(st.borderBottomWidth) > 1
+            && clear(st.borderTopColor) && clear(st.borderBottomColor) && !clear(st.borderLeftColor) && el.clientWidth === 0 && el.clientHeight === 0;
+          const clip = /polygon\(\s*0(?:px|%)?\s+0(?:px|%)?\s*,\s*100%\s+50%\s*,\s*0(?:px|%)?\s+100%\s*\)/.test(st.clipPath || "") && isFilled(st);
+          if (tri || clip) r = el.getBoundingClientRect();
+        }
+        if (!r || r.width < 1 || r.height < 1 || r.width > 70 || r.height > 70) continue;
+        if (!beside(el, r, -1) || !beside(el, r, 1)) continue;
+        marks.push({ el, r, cx: (r.left + r.right) / 2 });
+      }
+      // 横の位置が同じ（±6px）で、縦に重ならずに並ぶものを1組にする
+      marks.sort((a, b) => a.cx - b.cx || a.r.top - b.r.top);
+      // 2行だけのときは、同じ表の行どうしに限る（上下に並べた2本の流れ図は、それぞれが別の流れなので拾わない）
+      const sameTable = (a, b) => { const t = a.closest("table"); return !!t && t === b.closest("table"); };
+      let worst = 0;
+      for (let a = 0; a < marks.length; ) {
+        let b = a + 1;
+        while (b < marks.length && marks[b].cx - marks[a].cx <= 6) b++;
+        const grp = marks.slice(a, b).sort((x, y) => x.r.top - y.r.top);
+        const rows = [];
+        for (const m of grp) if (!rows.length || m.r.top >= rows[rows.length - 1].r.bottom - 1) rows.push(m);
+        const hit = rows.length >= 3 || (rows.length === 2 && sameTable(rows[0].el, rows[1].el));
+        if (hit && rows.length > worst) worst = rows.length;
+        a = b;
+      }
+      if (worst) warnOut.push(`p${n}: 左の列から右の列への関係を示す三角・矢印が、行ごとに ${worst} 個繰り返されている（§6: 見出しの行の区切りの位置に1つだけ置き、行の間は縦の区切り線で示す）`);
     }
     // 4. 版面の下側の空き（表紙・章扉・裏表紙は対象外）
     if (!std && !s.matches(".cover, .chap")) {
