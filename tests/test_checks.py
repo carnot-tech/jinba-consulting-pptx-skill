@@ -1838,3 +1838,132 @@ class PptxAppendixAndAxisNames(unittest.TestCase):
     def test_named_corner_passes(self):
         fails = self._check(self._deck(("部門ごとに承認待ちの日数を比べる", None, (True, True, self.ROWS))))
         self.assertFalse(any("§4.102" in f for f in fails), fails)
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class TitleLinesAndBandIndent(unittest.TestCase):
+    """check_layout：タイトルは2行まで（§2.1 FAIL）／塗りの帯の行も文字の左端を揃える（§4.63 WARN）"""
+
+    def layout_page(self, title, body):
+        page = (f'<section class="s"><h1>{title}</h1>{body}'
+                f'<div class="foot"><span>9</span></div></section>')
+        html = GOOD.replace("</body>", page + "</body>", 1)
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "deck.html"
+            p.write_text(html, encoding="utf8")
+            r = subprocess.run(["node", str(ROOT / "scripts" / "check_layout.mjs"), str(p), "--all"],
+                               capture_output=True, text=True, cwd=ROOT, encoding="utf8")
+        return r.stdout.splitlines()
+
+    BODY = '<p style="margin:0">承認待ちの時間を当日中に縮める</p>'
+    SHORT = "承認までの日数を3日から当日に縮める"
+
+    def test_three_line_title_fails(self):
+        long = "承認までの日数を3日から当日に縮めるために、申請の入力時に差し戻しの理由を示し、" * 3
+        out = self.layout_page(long, self.BODY)
+        self.assertTrue(any(l.startswith("FAIL") and "行に折り返している" in l for l in out), out)
+
+    def test_two_line_title_passes(self):
+        out = self.layout_page(self.SHORT + "<br>差し戻しの理由は入力時に示す", self.BODY)
+        self.assertFalse(any("行に折り返している" in l for l in out), out)
+
+    def table(self, band_left_pad):
+        rows = []
+        for i in range(4):
+            band = ' style="background:#eee"' if i == 1 else ""
+            pad = band_left_pad if i == 1 else 8
+            rows.append(f'<tr{band}><td style="padding:6px 8px 6px {pad}px">項目{i}の説明</td>'
+                        f'<td style="padding:6px 8px">{i}件</td></tr>')
+        return f'<table style="border-collapse:collapse;width:600px"><tbody>{"".join(rows)}</tbody></table>'
+
+    def test_indented_band_row_warns(self):
+        out = self.layout_page(self.SHORT, self.table(24))
+        self.assertTrue(any("塗りの帯を付けた行だけ" in l for l in out), out)
+
+    def test_band_row_with_same_padding_passes(self):
+        out = self.layout_page(self.SHORT, self.table(8))
+        self.assertFalse(any("塗りの帯を付けた行だけ" in l for l in out), out)
+
+
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class RepeatedRelationMarks(unittest.TestCase):
+    """check_layout：左の列から右の列への関係を示す三角・矢印は、行ごとに繰り返さない（§6 WARN）"""
+
+    MSG = "三角・矢印が、行ごとに"
+    TRI = ('<div style="width:0;height:0;border-top:8px solid transparent;'
+           'border-bottom:8px solid transparent;border-left:10px solid #555"></div>')
+
+    def layout_page(self, body):
+        page = (f'<section class="s"><h1>承認までの日数を3日から当日に縮める</h1>{body}'
+                f'<div class="foot"><span>9</span></div></section>')
+        html = GOOD.replace("</body>", page + "</body>", 1)
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "deck.html"
+            p.write_text(html, encoding="utf8")
+            r = subprocess.run(["node", str(ROOT / "scripts" / "check_layout.mjs"), str(p), "--all"],
+                               capture_output=True, text=True, cwd=ROOT, encoding="utf8")
+        return r.stdout.splitlines()
+
+    def grid(self, cells):
+        return ('<div style="display:grid;grid-template-columns:260px 30px 260px;gap:10px;align-items:center">'
+                + "".join(cells) + "</div>")
+
+    def test_triangle_on_every_row_warns(self):
+        cells = [f"<div>課題{i}の説明</div>{self.TRI}<div>解き方{i}の説明</div>" for i in range(3)]
+        out = self.layout_page(self.grid(cells))
+        self.assertTrue(any(l.startswith("WARN") and self.MSG in l for l in out), out)
+
+    def test_single_triangle_on_heading_row_passes(self):
+        cells = [f"<div><b>課題</b></div>{self.TRI}<div><b>解き方</b></div>"]
+        cells += [f"<div>課題{i}の説明</div><div></div><div>解き方{i}の説明</div>" for i in range(3)]
+        out = self.layout_page(self.grid(cells))
+        self.assertFalse(any(self.MSG in l for l in out), out)
+
+    def test_arrow_in_each_row_of_two_row_table_warns(self):
+        rows = "".join(f'<tr><td style="padding:6px 8px">課題{i}の説明</td><td style="padding:6px 8px">→</td>'
+                       f'<td style="padding:6px 8px">解き方{i}の説明</td></tr>' for i in range(2))
+        out = self.layout_page(f'<table style="border-collapse:collapse;width:600px"><tbody>{rows}</tbody></table>')
+        self.assertTrue(any(l.startswith("WARN") and self.MSG in l for l in out), out)
+
+    def test_bullet_marks_at_row_start_pass(self):
+        rows = "".join(f'<div style="display:flex;gap:8px"><span>▶</span><span>確かめること{i}</span></div>' for i in range(4))
+        out = self.layout_page(f"<div>{rows}</div>")
+        self.assertFalse(any(self.MSG in l for l in out), out)
+
+    def test_steps_side_by_side_pass(self):
+        steps = "".join(f"<div>手順{i}</div>" + (self.TRI if i < 3 else "") for i in range(4))
+        out = self.layout_page(f'<div style="display:flex;gap:12px;align-items:center">{steps}</div>')
+        self.assertFalse(any(self.MSG in l for l in out), out)
+
+
+class ChapterDividers(unittest.TestCase):
+    """check_deck：本文が11枚以上あるのに章の区切りが1枚も無い（§4.45 WARN）"""
+
+    MSG = "章の区切り（章扉）が1枚も無い"
+    TITLES = ["承認待ちは申請の入力の不備で長くなる", "差し戻しの理由は3種類に絞られる", "入力時に不備を示せば差し戻しは減る",
+              "確認の画面は申請者と承認者で分ける", "承認者には判断に要る数字だけを見せる", "金額の小さい申請は自動で通す",
+              "例外の申請は理由を添えて回す", "月末の集中は締め日の前倒しでならす", "部門ごとの差は入力の様式の違いで生じる",
+              "様式を1つにすれば教える手間が減る", "移行は影響の小さい部門から始める", "効果は承認までの日数で測る"]
+
+    def _deck(self, n, divider=""):
+        pages = [f'<section class="s"><h1>{t}</h1><table><tr><td>内訳{i}</td><td>{i + 2}件</td></tr></table>'
+                 f'<p>確かめた内容{i}</p><div class="foot"><span>{i + 2}</span></div></section>'
+                 for i, t in enumerate(self.TITLES[:n])]
+        if divider:
+            pages.insert(n // 2, divider)
+        cover = '<section class="s cover"><h1>申請の承認を当日に終える進め方</h1></section>'
+        return GOOD.split("<section", 1)[0] + cover + "".join(pages) + "</body></html>"
+
+    def test_twelve_pages_without_divider_warn(self):
+        self.assertTrue(any(self.MSG in w for w in warns(self._deck(12))), warns(self._deck(12)))
+
+    def test_chapter_page_passes(self):
+        div = '<section class="s chap"><div class="cno">02</div><div class="cbig">入力時に不備を示す</div></section>'
+        self.assertFalse(any(self.MSG in w for w in warns(self._deck(12, div))))
+
+    def test_untitled_section_page_passes(self):
+        div = '<section class="s"><div>SECTION 2 / 2</div><div>入力時に不備を示す</div></section>'
+        self.assertFalse(any(self.MSG in w for w in warns(self._deck(12, div))))
+
+    def test_ten_pages_without_divider_pass(self):
+        self.assertFalse(any(self.MSG in w for w in warns(self._deck(10))))

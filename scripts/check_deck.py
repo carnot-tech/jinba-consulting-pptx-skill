@@ -1007,6 +1007,7 @@ def check_html(path):
         t = re.sub(r"\s+", " ", t)
         titles.append(t)
         cls = (slide_classes[i - 1] if i - 1 < len(slide_classes) else "").split()
+        SLIDE_CLS[i] = set(cls)
         nums.append((i, page_number(s)))
         others = [x for x in _leaf_texts(s) if x != t and not re.fullmatch(r"\d{1,3}", x)]
         APPX_PAGES[i] = (appendix_tag_html(s, m, t), sum(_fwlen(x) for x in others),
@@ -1221,6 +1222,7 @@ def check_axis_names_pptx(idx, slide):
 
 
 PAGES = []  # [(idx, 本文テキスト)] check_pptx / check_html が詰める
+SLIDE_CLS = {}  # {idx: スライドの class の集合} check_html が詰める（§4.45 用。PPTX では空のまま）
 APPX_PAGES = {}  # {idx: (付録のタグチップがあるか, タイトル以外の文字数, 表・図・画像があるか)} §4.100 用
 APPX_LABEL = r"(?:appendix|付録|参考資料|補足資料)"
 APPX_SEP = r"[\s:：／/|｜・\-－—（(【\[「]"
@@ -1303,6 +1305,56 @@ def check_appendix(titles):
         fail(f"p{first}: 付録（Appendix）の手前に区切りスライドがない（§4.100: 本編と付録の間に「Appendix」＋中身1行の扉を1枚挟む）")
 
 
+CHAPTER_MIN_BODY = 11  # §4.45: 本文が11枚以上になったら章扉を入れる
+CHAPTER_CLASSES = {"chap", "sec", "div", "divider", "section", "agd", "agenda", "toc"}
+SECTION_NO_RE = re.compile(r"(?i)\bsection\s*\d+\s*/\s*\d+|第\s*[0-9０-９一二三四五六七八九十]+\s*章")
+
+
+def check_chapter_dividers(titles):
+    """§4.45: 本文が11枚以上あるのに、章の区切り（章扉）が1枚も無ければ WARN。
+    HTML だけを見る（PPTX は章扉を class で見分けられず、章一覧を載せた扉を本文と取り違える）。
+    本文 = 表紙・章扉・裏表紙・定型ページ（class に cover/chap/back/std）と、付録（その区切りを含む）を除いたページ。
+    章扉 = class に chap・sec・div・divider・section・agd・agenda・toc のどれかがあるページ、表紙と同じ class を持つ途中のページ、
+    タイトルを持たない表・図の無いページ、「SECTION n / N」「第n章」と書いた表・図の無いページ、
+    タイトルが短いラベルで本文も短く表・図の無いページ。
+    アジェンダのページを章ごとに再掲しているデッキ（アジェンダ・目次のページが2枚以上）は、それを区切りとみなす。
+    見落としを減らすより、区切りのあるデッキに誤って出さない側に倒してある。登壇用のピッチ（§9）は章扉を置かないので対象外"""
+    if not SLIDE_CLS or not PAGES:
+        return
+    n = max(SLIDE_CLS)
+    ttl = lambda i: (titles[i - 1] or "").strip() if i - 1 < len(titles) else ""
+    info = lambda i: APPX_PAGES.get(i, (False, 0, False))
+    body = dict(PAGES)
+    is_appx = lambda i: info(i)[0] or bool(APPX_TITLE_RE.search(ttl(i))) or (
+        not info(i)[2] and info(i)[1] <= DIVIDER_MAX_BODY and bool(re.match(r"^\s*" + APPX_LABEL, ttl(i) or body.get(i, ""), re.I)))
+    end = next((i for i in range(2, n + 1) if is_appx(i)), n + 1)  # 付録（区切りを含む）が始まるページ
+
+    def is_chap(i):
+        cls = SLIDE_CLS.get(i, set())
+        if i <= 1 or i >= n or "back" in cls:
+            return False
+        if cls & CHAPTER_CLASSES or "cover" in cls:
+            return True
+        _, chars, rich = info(i)
+        if rich:
+            return False
+        t = ttl(i)
+        if not t or SECTION_NO_RE.search(body.get(i, "")):
+            return True
+        return chars <= DIVIDER_MAX_BODY and _fwlen(t) <= 24 and not SENTENCE_RE.search(t)
+
+    pages = range(2, end)
+    if len([i for i in pages if AGENDA_TITLE_RE.search(ttl(i) or body.get(i, "")[:40])]) >= 2:
+        return
+    if any(is_chap(i) for i in pages):
+        return
+    main_pages = [i for i in pages if not (SLIDE_CLS.get(i, set()) & {"cover", "chap", "back", "std"})
+                  and not (i == n and (not ttl(i) or CLOSING_TITLE.search(ttl(i))))]
+    if len(main_pages) >= CHAPTER_MIN_BODY:
+        warn(f"本文が{len(main_pages)}枚あるのに、章の区切り（章扉）が1枚も無い（§4.45: 本文が11枚以上になったら、話の段が変わる所に章扉を入れる。"
+             "章扉は表紙と同じ地色に章一覧を1列で置き、現在の章だけを強調する。登壇用のピッチは対象外）")
+
+
 def main():
     global TEMPLATE_MODE
     args = sys.argv[1:]
@@ -1359,6 +1411,7 @@ def main():
         check_title_variety(titles)
         check_count_titles(titles)
         check_appendix(titles)
+        check_chapter_dividers(titles)
     if sources and not p.lower().endswith((".pptx", ".potx")):
         check_sources(p, sources)
     print("=== タイトル一覧（上から通し読みしてストーリーが繋がるか確認） ===")
