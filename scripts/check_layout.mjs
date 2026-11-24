@@ -509,10 +509,10 @@ const { issues, warns } = await page.evaluate(() => {
           if (hit) break;
         }
         // 32. 左右2列の片方だけの縦の空き（§4.26・§4.54）。版面の空き（4）はページ全体の上端〜下端で測るので、
-        // 片方の列が下まで埋まっていれば、もう片方の列が半分以上空いていても拾えない。列ごとに、見出し帯の下〜列の下端のうち
+        // 片方の列が下まで埋まっていれば、もう片方の列が半分以上空いていても拾えない。列ごとに、見出し帯の下〜行の下端のうち
         // 中身が占めない割合を測る。図の横の説明を縦中央に置くのは §4.26 で可だが、上下に分けても空きの量は同じ（§5.13）なので図の列も外さない。
         // 列の高さは隣の列で決まるため、しきい値は版面（30%・40%）より緩い 45%・55%。
-        // 対象: 上下の端が揃った左右2列（3列以上の並列の項目は短い列が空くのが自然）、列が本文の縦幅の4割以上、
+        // 対象: 左右に並んだ2列（3列以上の並列の項目は短い列が空くのが自然）、列が本文の縦幅の4割以上、
         // 枠・塗りのある箱の列でない（16 の領分）、もう片方の列が埋まっている（空き15%以下。両方空くなら 4 の領分）
         {
           const ttlB = (s.querySelector("h1, .title, .ttl") || s).getBoundingClientRect().bottom;
@@ -526,8 +526,12 @@ const { issues, warns } = await page.evaluate(() => {
               return cs.display !== "none" && cs.position !== "absolute" && r.width >= 120 && r.height >= 80 && ((c.textContent || "").trim() || c.querySelector("img, svg, canvas"));
             });
             if (cols.length !== 2) continue;
-            const rs = cols.map((c) => c.getBoundingClientRect());
-            if (Math.abs(rs[0].top - rs[1].top) > 4 || Math.abs(rs[0].bottom - rs[1].bottom) > 4 || rs[0].right > rs[1].left + 1) continue;
+            // 左右に並ぶ2列だけ。列を伸ばさずに置いても（align-items:start 等）見た目の空きは同じなので、
+            // 2列とも行の上端〜下端を基準に測る
+            const rr = cols.map((c) => c.getBoundingClientRect());
+            if (rr[0].right > rr[1].left + 1) continue;
+            const top = Math.min(rr[0].top, rr[1].top), bot = Math.max(rr[0].bottom, rr[1].bottom);
+            const rs = rr.map((r) => ({ top, bottom: bot, height: bot - top, left: r.left, right: r.right, width: r.width }));
             if (rs[0].height < area * 0.4) continue;
             const empty = cols.map((c, k) => {
               if (isBoxed(getComputedStyle(c))) return null;

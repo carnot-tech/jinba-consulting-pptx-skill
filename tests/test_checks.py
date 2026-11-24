@@ -683,6 +683,12 @@ class ColumnOneSideEmpty(unittest.TestCase):
         out = self.layout(self.page(self.bullets(2), ""))
         self.assertTrue(any(self.MSG in l and l.startswith("FAIL") for l in out), out)
 
+    def test_short_text_in_unstretched_column_fails(self):
+        # 列を伸ばさずに置いても（align-items:start）見た目の空きは同じなので、行の上端〜下端で測る
+        body = self.page(self.bullets(2), "").replace("grid-template-columns:2fr 1fr;", "grid-template-columns:2fr 1fr;align-items:start;", 1)
+        out = self.layout(body)
+        self.assertTrue(any(self.MSG in l and l.startswith("FAIL") for l in out), out)
+
     def test_text_filling_the_column_passes(self):
         # 直した版: 右の文字を一段大きくし、列の縦を中身で埋める
         out = self.layout(self.page(self.bullets(8, 17)))
