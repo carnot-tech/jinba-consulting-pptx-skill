@@ -31,6 +31,7 @@
 //  29. 表のセルの塗りに、同じ色の凡例チップがない（WARN。§5.2・§4.57。「—」だけの非該当セルは除く）
 //  30. 表の見出し（th）の塗り（WARN。§6）
 //  31. 左右2列に並べたとき、片方の列だけが上詰めで、もう片方は中身が下がって始まる（縦の揃え方の不一致。WARN。§4.104）
+//  32. 左右2列に並べたとき、片方の列だけが縦に大きく空いている（45%超で WARN・55%超で FAIL。図の横の縦中央も数える。§4.26・§4.54）
 //   4 の補足: 版面の30%超が空いているときは WARN（40%超は FAIL）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
 // 使い方: node scripts/check_layout.mjs deck.html [--all]   （--all で指摘を全件表示。既定は FAIL・WARN 各20件まで。playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
@@ -506,6 +507,45 @@ const { issues, warns } = await page.evaluate(() => {
             }
           }
           if (hit) break;
+        }
+        // 32. 左右2列の片方だけの縦の空き（§4.26・§4.54）。版面の空き（4）はページ全体の上端〜下端で測るので、
+        // 片方の列が下まで埋まっていれば、もう片方の列が半分以上空いていても拾えない。列ごとに、見出し帯の下〜行の下端のうち
+        // 中身が占めない割合を測る。図の横の説明を縦中央に置くのは §4.26 で可だが、上下に分けても空きの量は同じ（§5.13）なので図の列も外さない。
+        // 列の高さは隣の列で決まるため、しきい値は版面（30%・40%）より緩い 45%・55%。
+        // 対象: 左右に並んだ2列（3列以上の並列の項目は短い列が空くのが自然）、列が本文の縦幅の4割以上、
+        // 枠・塗りのある箱の列でない（16 の領分）、もう片方の列が埋まっている（空き15%以下。両方空くなら 4 の領分）
+        {
+          const ttlB = (s.querySelector("h1, .title, .ttl") || s).getBoundingClientRect().bottom;
+          const area = (fr ? fr.top : sr.bottom) - ttlB;
+          for (const g of s.querySelectorAll("*")) {
+            const gs = getComputedStyle(g);
+            const row = gs.display.includes("grid") || (gs.display.includes("flex") && !gs.flexDirection.startsWith("column"));
+            if (!row || g.closest("table, svg, .foot, .footer, footer, .src, h1, .title, .ttl")) continue;
+            const cols = [...g.children].filter((c) => {
+              const cs = getComputedStyle(c), r = c.getBoundingClientRect();
+              return cs.display !== "none" && cs.position !== "absolute" && r.width >= 120 && r.height >= 80 && ((c.textContent || "").trim() || c.querySelector("img, svg, canvas"));
+            });
+            if (cols.length !== 2) continue;
+            // 左右に並ぶ2列だけ。列を伸ばさずに置いても（align-items:start 等）見た目の空きは同じなので、
+            // 2列とも行の上端〜下端を基準に測る
+            const rr = cols.map((c) => c.getBoundingClientRect());
+            if (rr[0].right > rr[1].left + 1) continue;
+            const top = Math.min(rr[0].top, rr[1].top), bot = Math.max(rr[0].bottom, rr[1].bottom);
+            const rs = rr.map((r) => ({ top, bottom: bot, height: bot - top, left: r.left, right: r.right, width: r.width }));
+            if (rs[0].height < area * 0.4) continue;
+            const empty = cols.map((c, k) => {
+              if (isBoxed(getComputedStyle(c))) return null;
+              const band = headBand(c, rs[k]);
+              const inner = rs[k].height - band;
+              const [t, b] = contentSpan(c, rs[k].top + band);
+              return inner > 0 && isFinite(t) ? 1 - (b - t) / inner : null;
+            });
+            if (empty.includes(null)) continue;
+            const k = empty[0] > empty[1] ? 0 : 1;
+            if (empty[1 - k] > 0.15 || empty[k] <= 0.45) continue;
+            (empty[k] > 0.55 ? out : warnOut).push(`p${n}: ${k === 0 ? "左" : "右"}の列だけ縦の ${Math.round(empty[k] * 100)}% が空いている（${k === 0 ? "右" : "左"}の列は埋まっている。§4.54・§5.13: 縦中央に寄せても空きの量は同じ。列の幅を中身に合わせて配り直す・空いた列の文字を一段大きくする・形を変える。空きを埋めるために行や中身を足さない）`);
+            break;
+          }
         }
       }
       // 16. 塗り・枠のある大きな箱の中の空き（版面の空き判定は箱を「埋まっている」と数えるので、中身の空きを別に測る）
