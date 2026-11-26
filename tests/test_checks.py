@@ -1598,6 +1598,7 @@ class NarrowTableColumn(LayoutFeedback20261012):
         hits = [l for l in out if "列が細すぎ" in l]
         self.assertTrue(hits and all(l.startswith("FAIL") for l in hits), out)
         self.assertEqual(len(hits), 1, out)  # 同じ列のセルは1件にまとめる
+        self.assertIn("この列の幅を広げる", hits[0])  # 列そのものに狭い幅を指定した場合の直し方も示す
 
     def test_roomy_last_column_passes(self):
         # 最後の列の中身は約 46.7mm。文字は2行に折れる（＝幅を測る）が、1行に十分な字数が入る
@@ -1617,6 +1618,17 @@ class NarrowTableColumn(LayoutFeedback20261012):
     def test_preserved_newline_is_not_wrapping(self):
         out = self.layout(self.table(93, head="可", cells=('<span style="white-space:pre-line">○\n×</span>', "○")))
         self.assertFalse(any("列が細すぎ" in l for l in out), out)
+
+    def test_wrapping_inside_preserved_lines_fails(self):
+        # 改行をそのまま描く指定でも、改行で分けた行の数より多く折れていれば細った列
+        out = self.layout(self.table(93, head="可", cells=('<span style="white-space:pre-line">先に小さく試す\n当面は見送る</span>', "○")))
+        self.assertTrue(any(l.startswith("FAIL") and "列が細すぎ" in l for l in out), out)
+
+    def test_indented_list_is_measured_inside_its_indent(self):
+        # セルの中身は約 12.2mm（全角3字強）でも、4mm 字下げした箇条の文字は約 8.2mm（全角2字ぶん）で折れる
+        item = '<ul style="margin:0;padding-left:4mm"><li>先に小さく試す</li></ul>'
+        out = self.layout(self.table(91.5, head="可", cells=(item, "○")))
+        self.assertTrue(any(l.startswith("FAIL") and "列が細すぎ" in l for l in out), out)
 
     def test_message_is_one_line_for_pretty_printed_cells(self):
         # 見出しの文字の途中に改行がある HTML でも、指摘は1行に収まり、末尾の §6 まで check_all に届く
