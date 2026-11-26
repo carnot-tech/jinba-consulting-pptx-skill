@@ -1578,6 +1578,65 @@ class LayoutReviewFixes20261022(LayoutFeedback20261012):
         self.assertTrue(any("罫線に重なっている" in l for l in self.layout(body)))
 
 
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class NarrowTableColumn(LayoutFeedback20261012):
+    """check_layout：列幅の指定で使い切られ、1字幅まで細った列（§6 FAIL）"""
+
+    test_right_side_gap_warns = test_two_highlighted_rows_warn = test_std_page_skips_layout_checks = None
+    test_unequal_contrast_columns_warn = test_equal_contrast_columns_pass = None
+
+    ROW = '<tr><td>{a}</td><td>月に約120件の申請</td><td>承認者が一覧で確かめる</td><td>{d}</td></tr>'
+
+    def table(self, width, head="判断", cells=("先に試す", "当面は見送る")):
+        # 版面 306.67mm・セルの左右の余白 2.5mm ずつ。width=93 だと最後の列の中身は約 7.7mm（全角2字ぶん）
+        th = "".join(f'<th style="width:{width}mm">{h}</th>' for h in ("部門", "件数", "確かめ方"))
+        rows = "".join(self.ROW.format(a=a, d=d) for a, d in zip(("営業部", "管理部"), cells))
+        return f'<table style="table-layout:fixed"><tr>{th}<th>{head}</th></tr>{rows}</table>'
+
+    def test_collapsed_last_column_fails(self):
+        out = self.layout(self.table(93))
+        hits = [l for l in out if "列が細すぎ" in l]
+        self.assertTrue(hits and all(l.startswith("FAIL") for l in hits), out)
+        self.assertEqual(len(hits), 1, out)  # 同じ列のセルは1件にまとめる
+        self.assertIn("この列の幅を広げる", hits[0])  # 列そのものに狭い幅を指定した場合の直し方も示す
+
+    def test_roomy_last_column_passes(self):
+        # 最後の列の中身は約 46.7mm。文字は2行に折れる（＝幅を測る）が、1行に十分な字数が入る
+        out = self.layout(self.table(80, cells=("先に小さく試して効果を確かめてから広げる", "当面は見送る")))
+        self.assertFalse(any("列が細すぎ" in l for l in out), out)
+
+    def test_narrow_column_that_does_not_wrap_passes(self):
+        # 記号だけの細い列や、<br> で分けた短い行（どれも1行に収まる）は折り返しではない
+        out = self.layout(self.table(93, head="可", cells=("○", "先に<br>試す")))
+        self.assertFalse(any("列が細すぎ" in l for l in out), out)
+
+    def test_small_note_text_is_measured_by_its_own_size(self):
+        # セルの文字より小さい注記は、注記の文字の大きさで1行の字数を数える（約 7.7mm に 6pt なら約3.6字入る）
+        out = self.layout(self.table(93, head="可", cells=('<span style="font-size:6pt">先に小さく試す</span>', "○")))
+        self.assertFalse(any("列が細すぎ" in l for l in out), out)
+
+    def test_preserved_newline_is_not_wrapping(self):
+        out = self.layout(self.table(93, head="可", cells=('<span style="white-space:pre-line">○\n×</span>', "○")))
+        self.assertFalse(any("列が細すぎ" in l for l in out), out)
+
+    def test_wrapping_inside_preserved_lines_fails(self):
+        # 改行をそのまま描く指定でも、改行で分けた行の数より多く折れていれば細った列
+        out = self.layout(self.table(93, head="可", cells=('<span style="white-space:pre-line">先に小さく試す\n当面は見送る</span>', "○")))
+        self.assertTrue(any(l.startswith("FAIL") and "列が細すぎ" in l for l in out), out)
+
+    def test_indented_list_is_measured_inside_its_indent(self):
+        # セルの中身は約 12.2mm（全角3字強）でも、4mm 字下げした箇条の文字は約 8.2mm（全角2字ぶん）で折れる
+        item = '<ul style="margin:0;padding-left:4mm"><li>先に小さく試す</li></ul>'
+        out = self.layout(self.table(91.5, head="可", cells=(item, "○")))
+        self.assertTrue(any(l.startswith("FAIL") and "列が細すぎ" in l for l in out), out)
+
+    def test_message_is_one_line_for_pretty_printed_cells(self):
+        # 見出しの文字の途中に改行がある HTML でも、指摘は1行に収まり、末尾の §6 まで check_all に届く
+        out = self.layout(self.table(93, head="判断\n      の目安"))
+        hits = [l for l in out if "列が細すぎ" in l]
+        self.assertTrue(hits and all("§6" in l for l in hits), out)
+
+
 class AxisNameInHeaderBand(unittest.TestCase):
     # §4.102: 見出し行の左端セルを空欄にしない
     def test_empty_header_corner_fires(self):
