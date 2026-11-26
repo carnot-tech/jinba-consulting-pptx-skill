@@ -31,6 +31,7 @@
 //  29. 表のセルの塗りに、同じ色の凡例チップがない（WARN。§5.2・§4.57。「—」だけの非該当セルは除く）
 //  30. 表の見出し（th）の塗り（WARN。§6）
 //  31. 左右2列に並べたとき、片方の列だけが上詰めで、もう片方は中身が下がって始まる（縦の揃え方の不一致。WARN。§4.104）
+//  32. 表の列が細すぎて、折り返した文字が1行に全角3字ぶんも入らない（FAIL。§6）。はみ出さずに縦に伸びるだけなので 3・17 では拾えない
 //   4 の補足: 版面の30%超が空いているときは WARN（40%超は FAIL）
 // 正本から差し込んだ定型ページ（section に .std。§4.99）は、はみ出し以外の検査を飛ばす
 // 使い方: node scripts/check_layout.mjs deck.html [--all]   （--all で指摘を全件表示。既定は FAIL・WARN 各20件まで。playwright 必須: リポ直下で `npm run setup`。PLAYWRIGHT_MODULE_DIR でも解決可）
@@ -1003,6 +1004,42 @@ const { issues, warns } = await page.evaluate(() => {
           out.push(`p${n}: 文字が箱の外に ${Math.round(outBy)}px はみ出している「${(el.textContent || "").trim().slice(0, 20)}」（箱を広げる・文字を短くする・改行位置を変える）`);
         }
       }
+    }
+    // 32. 表の列が細すぎる（§6）: 列幅の指定の合計が表の幅を使い切ると、幅を指定していない列が1字幅まで細り、
+    // 文字が1字ずつ縦に折り返す。はみ出しにはならないので、折り返したセルの中身の幅を全角1字の実寸で割って測る
+    for (const t of std ? [] : s.querySelectorAll("table")) {
+      const cols = new Map();
+      for (const c of t.querySelectorAll("td, th")) {
+        if (c.closest("table") !== t) continue;
+        const st = getComputedStyle(c);
+        // 中身の幅は、セルの中に置いた高さ0の箱で測る。table-cell 以外（flex 等）では箱の幅が中身の幅にならないので飛ばす
+        if (st.display !== "table-cell" || st.visibility === "hidden" || /^vertical/.test(st.writingMode)) continue;
+        // 1つの文字の並びが2行以上に折れているセルだけを見る（<br> や別の箇条で分けた短い行は折り返しではない）
+        let wraps = false;
+        const tw = document.createTreeWalker(c, NodeFilter.SHOW_TEXT);
+        for (let nd = tw.nextNode(); nd && !wraps; nd = tw.nextNode()) {
+          if (nd.textContent.trim().length < 2) continue;
+          const rg = document.createRange();
+          rg.selectNodeContents(nd);
+          const tops = [];
+          for (const r of rg.getClientRects())
+            if (r.width > 0.5 && r.height > 1 && !tops.some((y) => Math.abs(y - r.top) < r.height / 2)) tops.push(r.top);
+          wraps = tops.length >= 2;
+        }
+        if (!wraps) continue;
+        const probe = document.createElement("div");
+        probe.style.cssText = "display:block;height:0;margin:0;padding:0;border:0";
+        c.appendChild(probe);
+        const inner = probe.getBoundingClientRect().width;
+        probe.remove();
+        const em = effSize(c);
+        if (!em || inner / em >= 3) continue;
+        // 同じ列のセルは1件にまとめる（最初に見つかったセル＝多くは見出しの文字を出す）
+        const key = Math.round(c.getBoundingClientRect().left);
+        if (!cols.has(key)) cols.set(key, { fit: inner / em, text: (c.textContent || "").trim().slice(0, 20) });
+      }
+      for (const { fit, text } of cols.values())
+        out.push(`p${n}: 表の列が細すぎて、文字が1行に全角${fit < 1 ? "1字未満" : `${Math.floor(fit)}字`}ずつ縦に折り返している「${text}」（指定した列幅とセルの左右の余白の合計が表の幅に収まるよう、ほかの列を削る・列を減らす・文言を短くする。§6）`);
     }
     for (const el of els) {
       const r = el.getBoundingClientRect();

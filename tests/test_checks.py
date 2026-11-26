@@ -1578,6 +1578,37 @@ class LayoutReviewFixes20261022(LayoutFeedback20261012):
         self.assertTrue(any("罫線に重なっている" in l for l in self.layout(body)))
 
 
+@unittest.skipUnless(_has_playwright(), "npm run setup で playwright を入れると実行される")
+class NarrowTableColumn(LayoutFeedback20261012):
+    """check_layout：列幅の指定で使い切られ、1字幅まで細った列（§6 FAIL）"""
+
+    test_right_side_gap_warns = test_two_highlighted_rows_warn = test_std_page_skips_layout_checks = None
+    test_unequal_contrast_columns_warn = test_equal_contrast_columns_pass = None
+
+    ROW = '<tr><td>{a}</td><td>月に約120件の申請</td><td>承認者が一覧で確かめる</td><td>{d}</td></tr>'
+
+    def table(self, width, head="判断", cells=("先に試す", "当面は見送る")):
+        # 版面 306.67mm・セルの左右の余白 2.5mm ずつ。width=93 だと最後の列の中身は約 7.7mm（全角2字ぶん）
+        th = "".join(f'<th style="width:{width}mm">{h}</th>' for h in ("部門", "件数", "確かめ方"))
+        rows = "".join(self.ROW.format(a=a, d=d) for a, d in zip(("営業部", "管理部"), cells))
+        return f'<table style="table-layout:fixed"><tr>{th}<th>{head}</th></tr>{rows}</table>'
+
+    def test_collapsed_last_column_fails(self):
+        out = self.layout(self.table(93))
+        hits = [l for l in out if "列が細すぎ" in l]
+        self.assertTrue(hits and all(l.startswith("FAIL") for l in hits), out)
+        self.assertEqual(len(hits), 1, out)  # 同じ列のセルは1件にまとめる
+
+    def test_roomy_last_column_passes(self):
+        out = self.layout(self.table(70))
+        self.assertFalse(any("列が細すぎ" in l for l in out), out)
+
+    def test_narrow_column_that_does_not_wrap_passes(self):
+        # 記号だけの細い列や、<br> で分けた短い行は折り返しではない
+        out = self.layout(self.table(93, head="可", cells=("○", "△<br>×")))
+        self.assertFalse(any("列が細すぎ" in l for l in out), out)
+
+
 class AxisNameInHeaderBand(unittest.TestCase):
     # §4.102: 見出し行の左端セルを空欄にしない
     def test_empty_header_corner_fires(self):
