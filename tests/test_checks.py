@@ -1600,13 +1600,29 @@ class NarrowTableColumn(LayoutFeedback20261012):
         self.assertEqual(len(hits), 1, out)  # 同じ列のセルは1件にまとめる
 
     def test_roomy_last_column_passes(self):
-        out = self.layout(self.table(70))
+        # 最後の列の中身は約 46.7mm。文字は2行に折れる（＝幅を測る）が、1行に十分な字数が入る
+        out = self.layout(self.table(80, cells=("先に小さく試して効果を確かめてから広げる", "当面は見送る")))
         self.assertFalse(any("列が細すぎ" in l for l in out), out)
 
     def test_narrow_column_that_does_not_wrap_passes(self):
-        # 記号だけの細い列や、<br> で分けた短い行は折り返しではない
-        out = self.layout(self.table(93, head="可", cells=("○", "△<br>×")))
+        # 記号だけの細い列や、<br> で分けた短い行（どれも1行に収まる）は折り返しではない
+        out = self.layout(self.table(93, head="可", cells=("○", "先に<br>試す")))
         self.assertFalse(any("列が細すぎ" in l for l in out), out)
+
+    def test_small_note_text_is_measured_by_its_own_size(self):
+        # セルの文字より小さい注記は、注記の文字の大きさで1行の字数を数える（約 7.7mm に 6pt なら約3.6字入る）
+        out = self.layout(self.table(93, head="可", cells=('<span style="font-size:6pt">先に小さく試す</span>', "○")))
+        self.assertFalse(any("列が細すぎ" in l for l in out), out)
+
+    def test_preserved_newline_is_not_wrapping(self):
+        out = self.layout(self.table(93, head="可", cells=('<span style="white-space:pre-line">○\n×</span>', "○")))
+        self.assertFalse(any("列が細すぎ" in l for l in out), out)
+
+    def test_message_is_one_line_for_pretty_printed_cells(self):
+        # 見出しの文字の途中に改行がある HTML でも、指摘は1行に収まり、末尾の §6 まで check_all に届く
+        out = self.layout(self.table(93, head="判断\n      の目安"))
+        hits = [l for l in out if "列が細すぎ" in l]
+        self.assertTrue(hits and all("§6" in l for l in hits), out)
 
 
 class AxisNameInHeaderBand(unittest.TestCase):
